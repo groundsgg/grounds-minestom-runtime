@@ -1,0 +1,22 @@
+name: Docker
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker-build-push:
+    uses: groundsgg/.github/.github/workflows/docker-gradle-build-push.yml@main
+    secrets: inherit
+    permissions:
+      contents: read
+      packages: write
