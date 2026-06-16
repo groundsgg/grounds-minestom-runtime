@@ -1,9 +1,14 @@
 package gg.grounds.runtime
 
-interface GroundsModuleProvider {
+import gg.grounds.modules.ModuleDescriptor
+import gg.grounds.modules.ModuleProvider
+
+interface GroundsModuleProvider : ModuleProvider<GroundsModule> {
     val id: String
     val version: String
     val serverTypes: Set<ServerType>
+    override val descriptor: ModuleDescriptor
+        get() = ModuleDescriptor(id = id, version = version)
 
-    fun create(): GroundsModule
+    override fun create(): GroundsModule
 }

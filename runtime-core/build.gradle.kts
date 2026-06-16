@@ -2,6 +2,7 @@ plugins { id("gg.grounds.minestom-conventions") }
 
 dependencies {
     api(project(":runtime-api"))
+    implementation("gg.grounds:library-jvm-modules-module-core:0.1.0")
     implementation("net.minestom:minestom:2026.06.05-26.1.2")
     implementation("org.slf4j:slf4j-api:2.0.18")
 
