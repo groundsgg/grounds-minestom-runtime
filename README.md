@@ -24,7 +24,38 @@ examples          Minimal runnable server examples
 ## Build
 
 ```bash
-./gradlew build
+./gradlew build -Pgithub.user="$GITHUB_ACTOR" -Pgithub.token="$GITHUB_TOKEN"
+```
+
+## Module Composition
+
+Modules can be installed directly, or through `GroundsModuleProvider` when they need
+descriptor metadata, dependency ordering, server-type filtering, or typed services.
+
+```kotlin
+class MatchmakingModuleProvider : GroundsModuleProvider {
+    override val id = "grounds.matchmaking"
+    override val version = "1.0.0"
+    override val serverTypes = setOf(ServerType.MINIGAME)
+    override val descriptor =
+        ModuleDescriptor(
+            id = id,
+            version = version,
+            requires = setOf(serviceKey<PlayerService>()),
+            provides = setOf(serviceKey<MatchmakingService>()),
+        )
+
+    override fun create(): GroundsModule = MatchmakingModule()
+}
+```
+
+The runtime validates provider descriptors before startup, sorts provider-backed modules
+by explicit dependencies and required service providers, and passes one shared
+`ServiceRegistry` through `GroundsServerContext`. Use type-first access for services:
+
+```kotlin
+ctx.services.register<MatchmakingService>(DefaultMatchmakingService())
+val players = ctx.services.require<PlayerService>()
 ```
 
 ## License

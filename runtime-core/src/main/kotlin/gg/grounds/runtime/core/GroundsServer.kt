@@ -1,6 +1,9 @@
 package gg.grounds.runtime.core
 
+import gg.grounds.modules.ServiceRegistry
+import gg.grounds.modules.core.ServiceLoaderModuleDiscovery
 import gg.grounds.runtime.GroundsModule
+import gg.grounds.runtime.GroundsModuleProvider
 import gg.grounds.runtime.GroundsServerContext
 import gg.grounds.runtime.RuntimeEnvironment
 import gg.grounds.runtime.ServerType
@@ -10,9 +13,10 @@ import net.minestom.server.event.EventNode
 import org.slf4j.LoggerFactory
 
 class GroundsServer
-private constructor(private val config: RuntimeConfig, modules: List<GroundsModule>) {
+private constructor(private val config: RuntimeConfig, composition: GroundsModuleComposition) {
     private val logger = LoggerFactory.getLogger(GroundsServer::class.java)
-    private val modules = modules.toList()
+    private val modules = composition.modules
+    private val services = composition.services
     private val shutdownHooks = mutableListOf<() -> Unit>()
     private var started = false
 
@@ -21,19 +25,19 @@ private constructor(private val config: RuntimeConfig, modules: List<GroundsModu
         started = true
 
         val minecraftServer = MinecraftServer.init()
-        val context = DefaultGroundsServerContext(config, shutdownHooks)
+        val context = DefaultGroundsServerContext(config, services, shutdownHooks)
 
-        modules.forEach { module ->
-            logger.info("Installing Grounds module {}", module.id)
-            module.install(context)
+        modules.forEach { installed ->
+            logger.info("Installing Grounds module {}", installed.id)
+            installed.module.install(context)
         }
 
         Runtime.getRuntime().addShutdownHook(Thread { stop() })
         minecraftServer.start(config.host, config.port)
 
-        modules.forEach { module ->
-            logger.info("Starting Grounds module {}", module.id)
-            module.start()
+        modules.forEach { installed ->
+            logger.info("Starting Grounds module {}", installed.id)
+            installed.module.start()
         }
     }
 
@@ -41,9 +45,9 @@ private constructor(private val config: RuntimeConfig, modules: List<GroundsModu
         if (!started) return
         started = false
 
-        modules.asReversed().forEach { module ->
-            logger.info("Stopping Grounds module {}", module.id)
-            module.stop()
+        modules.asReversed().forEach { installed ->
+            logger.info("Stopping Grounds module {}", installed.id)
+            installed.module.stop()
         }
         shutdownHooks.asReversed().forEach { it.invoke() }
         MinecraftServer.stopCleanly()
@@ -51,6 +55,7 @@ private constructor(private val config: RuntimeConfig, modules: List<GroundsModu
 
     private class DefaultGroundsServerContext(
         private val config: RuntimeConfig,
+        override val services: ServiceRegistry,
         private val shutdownHooks: MutableList<() -> Unit>,
     ) : GroundsServerContext {
         override val serverType: ServerType = config.serverType
@@ -66,12 +71,27 @@ private constructor(private val config: RuntimeConfig, modules: List<GroundsModu
     class Builder {
         private var config: RuntimeConfig = RuntimeConfig.fromEnvironment()
         private val modules = mutableListOf<GroundsModule>()
+        private val providers = mutableListOf<GroundsModuleProvider>()
 
         fun config(config: RuntimeConfig): Builder = apply { this.config = config }
 
         fun install(module: GroundsModule): Builder = apply { modules.add(module) }
 
-        fun build(): GroundsServer = GroundsServer(config, modules)
+        fun install(provider: GroundsModuleProvider): Builder = apply { providers.add(provider) }
+
+        fun discoverProviders(
+            classLoader: ClassLoader = Thread.currentThread().contextClassLoader
+        ): Builder = apply {
+            providers.addAll(
+                ServiceLoaderModuleDiscovery.discover(
+                    providerType = GroundsModuleProvider::class.java,
+                    classLoader = classLoader,
+                )
+            )
+        }
+
+        fun build(): GroundsServer =
+            GroundsServer(config, GroundsModuleComposer.compose(config, modules, providers))
 
         fun start(): GroundsServer {
             return build().also { it.start() }
