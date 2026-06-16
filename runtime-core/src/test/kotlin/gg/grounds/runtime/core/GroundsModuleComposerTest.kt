@@ -91,6 +91,37 @@ class GroundsModuleComposerTest {
     }
 
     @Test
+    fun `providers support every server type by default`() {
+        val provider =
+            object : GroundsModuleProvider {
+                override val id: String = "grounds.shared"
+                override val version: String = "1.0.0"
+
+                override fun create(): GroundsModule = module("grounds.shared")
+            }
+
+        val lobbyComposition =
+            GroundsModuleComposer.compose(
+                config =
+                    RuntimeConfig(
+                        serverType = ServerType.LOBBY,
+                        environment = RuntimeEnvironment.TEST,
+                    ),
+                modules = emptyList(),
+                providers = listOf(provider),
+            )
+        val minigameComposition =
+            GroundsModuleComposer.compose(
+                config = minigameConfig(),
+                modules = emptyList(),
+                providers = listOf(provider),
+            )
+
+        assertEquals(listOf("grounds.shared"), lobbyComposition.modules.map { it.id })
+        assertEquals(listOf("grounds.shared"), minigameComposition.modules.map { it.id })
+    }
+
+    @Test
     fun `fails when required services are not provided`() {
         val provider =
             provider(
