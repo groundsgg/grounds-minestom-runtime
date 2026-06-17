@@ -24,6 +24,16 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
         check(!started) { "server is already started" }
         started = true
 
+        logger.info(
+            "Starting Grounds server (serverType={}, environment={}, bind={}:{}, moduleCount={})",
+            config.serverType,
+            config.environment,
+            config.host,
+            config.port,
+            modules.size,
+        )
+        logger.info("Activated Grounds modules: {}", modules.joinToString { it.id })
+
         val minecraftServer = MinecraftServer.init()
         val context = DefaultGroundsServerContext(config, services, shutdownHooks)
 
@@ -69,29 +79,87 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
     }
 
     class Builder {
+        private val logger = LoggerFactory.getLogger(Builder::class.java)
         private var config: RuntimeConfig = RuntimeConfig.fromEnvironment()
         private val modules = mutableListOf<GroundsModule>()
         private val providers = mutableListOf<GroundsModuleProvider>()
+        private val discoveredProviders = mutableListOf<GroundsModuleProvider>()
+        private val selectedDiscoveredProviderIds = mutableListOf<String>()
 
         fun config(config: RuntimeConfig): Builder = apply { this.config = config }
 
-        fun install(module: GroundsModule): Builder = apply { modules.add(module) }
+        fun use(module: GroundsModule): Builder = apply {
+            logger.info("Using Grounds module {}", module.id)
+            modules.add(module)
+        }
 
-        fun install(provider: GroundsModuleProvider): Builder = apply { providers.add(provider) }
+        fun use(provider: GroundsModuleProvider): Builder = apply {
+            logger.info(
+                "Using Grounds module provider {} (version={}, serverTypes={})",
+                provider.id,
+                provider.version,
+                provider.serverTypes.joinToString(),
+            )
+            providers.add(provider)
+        }
+
+        fun useProvider(id: String): Builder = apply {
+            logger.info("Using discovered Grounds module provider {}", id)
+            selectedDiscoveredProviderIds.add(id)
+        }
 
         fun discoverProviders(
             classLoader: ClassLoader = Thread.currentThread().contextClassLoader
         ): Builder = apply {
-            providers.addAll(
+            val discovered =
                 ServiceLoaderModuleDiscovery.discover(
                     providerType = GroundsModuleProvider::class.java,
                     classLoader = classLoader,
                 )
+            if (discovered.isEmpty()) {
+                logger.info("Discovered Grounds module providers: none")
+            } else {
+                logger.info(
+                    "Discovered Grounds module providers: {}",
+                    discovered.joinToString { provider -> "${provider.id}@${provider.version}" },
+                )
+            }
+            discoveredProviders.addAll(discovered)
+        }
+
+        fun build(): GroundsServer {
+            val selectedDiscoveredProviders = resolveSelectedDiscoveredProviders()
+            val activeProviders = providers + selectedDiscoveredProviders
+            logger.info(
+                "Building Grounds server (serverType={}, environment={}, directModules={}, providers={}, discoveredProviderSelections={})",
+                config.serverType,
+                config.environment,
+                modules.joinToString { it.id }.ifEmpty { "none" },
+                activeProviders.joinToString { it.id }.ifEmpty { "none" },
+                selectedDiscoveredProviderIds.joinToString().ifEmpty { "none" },
+            )
+            return GroundsServer(
+                config,
+                GroundsModuleComposer.compose(config, modules, activeProviders),
             )
         }
 
-        fun build(): GroundsServer =
-            GroundsServer(config, GroundsModuleComposer.compose(config, modules, providers))
+        private fun resolveSelectedDiscoveredProviders(): List<GroundsModuleProvider> =
+            selectedDiscoveredProviderIds.map { id ->
+                val matches = discoveredProviders.filter { provider -> provider.id == id }
+                when (matches.size) {
+                    0 ->
+                        error(
+                            "Grounds module provider $id was requested but not discovered. " +
+                                "Available providers: ${discoveredProviders.joinToString { it.id }.ifEmpty { "none" }}"
+                        )
+                    1 -> matches.single()
+                    else ->
+                        error(
+                            "Grounds module provider $id is ambiguous; ${matches.size} providers were discovered"
+                        )
+                }
+            }
 
         fun start(): GroundsServer {
             return build().also { it.start() }
