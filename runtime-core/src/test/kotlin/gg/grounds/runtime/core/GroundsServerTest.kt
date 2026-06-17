@@ -5,7 +5,9 @@ import gg.grounds.runtime.GroundsModuleProvider
 import gg.grounds.runtime.GroundsServerContext
 import gg.grounds.runtime.RuntimeEnvironment
 import gg.grounds.runtime.ServerType
+import net.minestom.server.MinecraftServer
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
 
 class GroundsServerTest {
@@ -13,11 +15,14 @@ class GroundsServerTest {
     fun `runtime config parses environment`() {
         val config =
             RuntimeConfig.fromEnvironment(
-                mapOf(
-                    "GROUNDS_SERVER_TYPE" to "lobby",
-                    "GROUNDS_ENV" to "test",
-                    "GROUNDS_BIND_HOST" to "127.0.0.1",
-                    "GROUNDS_BIND_PORT" to "25566",
+                RuntimeEnv.of(
+                    mapOf(
+                        "GROUNDS_SERVER_TYPE" to "lobby",
+                        "GROUNDS_ENV" to "test",
+                        "GROUNDS_BIND_HOST" to "127.0.0.1",
+                        "GROUNDS_BIND_PORT" to "25566",
+                        "GROUNDS_SERVER_BRAND" to "Grounds Test",
+                    )
                 )
             )
 
@@ -25,6 +30,38 @@ class GroundsServerTest {
         assertEquals(RuntimeEnvironment.TEST, config.environment)
         assertEquals("127.0.0.1", config.host)
         assertEquals(25566, config.port)
+        assertEquals("Grounds Test", config.serverBrand)
+    }
+
+    @Test
+    fun `runtime config defaults server brand to Grounds`() {
+        val config = RuntimeConfig.fromEnvironment(RuntimeEnv.of(emptyMap()))
+
+        assertEquals("Grounds", config.serverBrand)
+    }
+
+    @Test
+    fun `runtime config rejects invalid bind port`() {
+        val error =
+            assertThrows(IllegalArgumentException::class.java) {
+                RuntimeConfig.fromEnvironment(RuntimeEnv.of(mapOf("GROUNDS_BIND_PORT" to "abc")))
+            }
+
+        assertEquals("unsupported GROUNDS_BIND_PORT: abc", error.message)
+    }
+
+    @Test
+    fun `runtime applies configured server brand to Minestom`() {
+        MinecraftServer.init()
+        val previousBrand = MinecraftServer.getBrandName()
+        try {
+            applyRuntimeBrand(testConfig(serverBrand = "Grounds Test"))
+
+            assertEquals("Grounds Test", MinecraftServer.getBrandName())
+        } finally {
+            MinecraftServer.setBrandName(previousBrand)
+            MinecraftServer.stopCleanly()
+        }
     }
 
     @Test
@@ -51,8 +88,12 @@ class GroundsServerTest {
         assertEquals(listOf("grounds.selected-discovered"), server.installedModuleIds())
     }
 
-    private fun testConfig(): RuntimeConfig =
-        RuntimeConfig(serverType = ServerType.MINIGAME, environment = RuntimeEnvironment.TEST)
+    private fun testConfig(serverBrand: String = "Grounds"): RuntimeConfig =
+        RuntimeConfig(
+            serverType = ServerType.MINIGAME,
+            environment = RuntimeEnvironment.TEST,
+            serverBrand = serverBrand,
+        )
 
     private fun testModule(id: String): GroundsModule =
         object : GroundsModule {
