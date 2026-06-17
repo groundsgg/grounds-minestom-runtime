@@ -10,13 +10,13 @@ import gg.grounds.runtime.core.RuntimeConfig
 object TestGroundsServer {
     fun minigame(vararg modules: GroundsModule): GroundsServer {
         val builder = minigameBuilder()
-        modules.forEach(builder::install)
+        modules.forEach(builder::use)
         return builder.build()
     }
 
     fun minigameWithProviders(vararg providers: GroundsModuleProvider): GroundsServer {
         val builder = minigameBuilder()
-        providers.forEach(builder::install)
+        providers.forEach(builder::use)
         return builder.build()
     }
 

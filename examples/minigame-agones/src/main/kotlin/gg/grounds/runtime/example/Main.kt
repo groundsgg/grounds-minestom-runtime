@@ -50,5 +50,12 @@ private class ExampleMinigameModule : GroundsModule {
 }
 
 fun main() {
-    GroundsServer.builder().install(ExampleMinigameModuleProvider()).start()
+    buildExampleServer().start()
 }
+
+internal fun buildExampleServer(): GroundsServer =
+    GroundsServer.builder()
+        .discoverProviders()
+        .useProvider("grounds.agones")
+        .use(ExampleMinigameModuleProvider())
+        .build()

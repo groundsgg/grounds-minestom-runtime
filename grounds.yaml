@@ -1,0 +1,10 @@
+name: minigame-agones
+type: minestom-server
+baseImage: minestom
+build:
+  task: :examples:minigame-agones:distTar
+  artifact: examples/minigame-agones/build/distributions/*.tar
+modules:
+  - id: plugin-agones
+    variant: minestom
+    source: github:groundsgg/plugin-agones@v0.5.1:plugin-agones-minestom.jar

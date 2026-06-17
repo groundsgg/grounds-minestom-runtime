@@ -29,7 +29,7 @@ examples          Minimal runnable server examples
 
 ## Module Composition
 
-Modules can be installed directly, or through `GroundsModuleProvider` when they need
+Runtimes use modules directly, or through `GroundsModuleProvider` when they need
 descriptor metadata, dependency ordering, server-type filtering, or typed services.
 
 ```kotlin
