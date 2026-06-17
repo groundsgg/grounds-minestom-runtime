@@ -25,16 +25,18 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
         started = true
 
         logger.info(
-            "Starting Grounds server (serverType={}, environment={}, bind={}:{}, moduleCount={})",
+            "Starting Grounds server (serverType={}, environment={}, bind={}:{}, brand={}, moduleCount={})",
             config.serverType,
             config.environment,
             config.host,
             config.port,
+            config.serverBrand,
             modules.size,
         )
         logger.info("Activated Grounds modules: {}", modules.joinToString { it.id })
 
         val minecraftServer = MinecraftServer.init()
+        applyRuntimeBrand(config)
         val context = DefaultGroundsServerContext(config, services, shutdownHooks)
 
         modules.forEach { installed ->
@@ -169,4 +171,8 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
     companion object {
         fun builder(): Builder = Builder()
     }
+}
+
+internal fun applyRuntimeBrand(config: RuntimeConfig) {
+    MinecraftServer.setBrandName(config.serverBrand)
 }

@@ -8,35 +8,37 @@ data class RuntimeConfig(
     val environment: RuntimeEnvironment,
     val host: String = "0.0.0.0",
     val port: Int = 25565,
+    val serverBrand: String = "Grounds",
 ) {
     companion object {
-        fun fromEnvironment(env: Map<String, String> = System.getenv()): RuntimeConfig {
+        fun fromEnvironment(env: RuntimeEnv = RuntimeEnv.system()): RuntimeConfig {
             return RuntimeConfig(
-                serverType = parseServerType(env["GROUNDS_SERVER_TYPE"]),
-                environment = parseEnvironment(env["GROUNDS_ENV"]),
-                host = env["GROUNDS_BIND_HOST"] ?: "0.0.0.0",
-                port = env["GROUNDS_BIND_PORT"]?.toIntOrNull() ?: 25565,
+                serverType =
+                    env.choice("GROUNDS_SERVER_TYPE", ServerType.MINIGAME, ::parseServerType),
+                environment = env.choice("GROUNDS_ENV", RuntimeEnvironment.DEV, ::parseEnvironment),
+                host = env.string("GROUNDS_BIND_HOST", "0.0.0.0"),
+                port = env.int("GROUNDS_BIND_PORT", 25565),
+                serverBrand = env.string("GROUNDS_SERVER_BRAND", "Grounds"),
             )
         }
 
-        private fun parseServerType(value: String?): ServerType {
-            return when (value?.lowercase()) {
+        fun fromEnvironment(env: Map<String, String>): RuntimeConfig =
+            fromEnvironment(RuntimeEnv.of(env))
+
+        private fun parseServerType(value: String): ServerType? {
+            return when (value.lowercase()) {
                 "lobby" -> ServerType.LOBBY
-                "minigame",
-                null,
-                "" -> ServerType.MINIGAME
-                else -> error("unsupported GROUNDS_SERVER_TYPE: $value")
+                "minigame" -> ServerType.MINIGAME
+                else -> null
             }
         }
 
-        private fun parseEnvironment(value: String?): RuntimeEnvironment {
-            return when (value?.lowercase()) {
+        private fun parseEnvironment(value: String): RuntimeEnvironment? {
+            return when (value.lowercase()) {
                 "prod" -> RuntimeEnvironment.PROD
                 "test" -> RuntimeEnvironment.TEST
-                "dev",
-                null,
-                "" -> RuntimeEnvironment.DEV
-                else -> error("unsupported GROUNDS_ENV: $value")
+                "dev" -> RuntimeEnvironment.DEV
+                else -> null
             }
         }
     }
