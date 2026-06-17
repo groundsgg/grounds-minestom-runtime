@@ -57,11 +57,9 @@ data class RuntimeConfig(
         private fun parseProxyConfig(env: RuntimeEnv): ProxyConfig {
             val mode = env.choice("GROUNDS_PROXY_MODE", ProxyMode.AUTO, ::parseProxyMode)
             val secret = env.firstString(velocityForwardingSecretNames)
-            if (mode == ProxyMode.VELOCITY && secret == null) {
-                throw IllegalArgumentException(
-                    "GROUNDS_PROXY_MODE=velocity requires one of " +
-                        velocityForwardingSecretNames.joinToString()
-                )
+            require(!(mode == ProxyMode.VELOCITY && secret == null)) {
+                "GROUNDS_PROXY_MODE=velocity requires one of " +
+                    velocityForwardingSecretNames.joinToString()
             }
             return ProxyConfig(mode = mode, velocityForwardingSecret = secret)
         }
