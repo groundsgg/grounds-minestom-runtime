@@ -4,9 +4,6 @@ class RuntimeEnv private constructor(private val lookup: (String) -> String?) {
     fun string(name: String, default: String): String =
         lookup(name)?.trim()?.takeIf { it.isNotEmpty() } ?: default
 
-    fun firstString(names: List<String>): String? =
-        names.firstNotNullOfOrNull { name -> lookup(name)?.trim()?.takeIf { it.isNotEmpty() } }
-
     fun int(name: String, default: Int): Int {
         val value = lookup(name)?.trim()?.takeIf { it.isNotEmpty() } ?: return default
         return value.toIntOrNull() ?: throw IllegalArgumentException("unsupported $name: $value")

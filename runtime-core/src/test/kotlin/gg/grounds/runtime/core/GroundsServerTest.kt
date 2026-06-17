@@ -53,17 +53,6 @@ class GroundsServerTest {
     }
 
     @Test
-    fun `runtime config reads legacy velocity forwarding secret aliases`() {
-        val config =
-            RuntimeConfig.fromEnvironment(
-                RuntimeEnv.of(mapOf("GROUNDS_LOBBY_VELOCITY_SECRET" to "legacy-secret"))
-            )
-
-        assertEquals(ProxyMode.AUTO, config.proxy.mode)
-        assertEquals("legacy-secret", config.proxy.velocityForwardingSecret)
-    }
-
-    @Test
     fun `runtime config rejects forced velocity mode without forwarding secret`() {
         val error =
             assertThrows(IllegalArgumentException::class.java) {
@@ -73,7 +62,27 @@ class GroundsServerTest {
             }
 
         assertEquals(
-            "GROUNDS_PROXY_MODE=velocity requires one of GROUNDS_VELOCITY_FORWARDING_SECRET, VELOCITY_FORWARDING_SECRET, GROUNDS_LOBBY_VELOCITY_SECRET, PAPER_VELOCITY_SECRET",
+            "GROUNDS_PROXY_MODE=velocity requires GROUNDS_VELOCITY_FORWARDING_SECRET",
+            error.message,
+        )
+    }
+
+    @Test
+    fun `runtime config ignores legacy velocity forwarding secret aliases`() {
+        val error =
+            assertThrows(IllegalArgumentException::class.java) {
+                RuntimeConfig.fromEnvironment(
+                    RuntimeEnv.of(
+                        mapOf(
+                            "GROUNDS_PROXY_MODE" to "velocity",
+                            "GROUNDS_LOBBY_VELOCITY_SECRET" to "legacy-secret",
+                        )
+                    )
+                )
+            }
+
+        assertEquals(
+            "GROUNDS_PROXY_MODE=velocity requires GROUNDS_VELOCITY_FORWARDING_SECRET",
             error.message,
         )
     }

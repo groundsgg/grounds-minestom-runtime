@@ -193,8 +193,4 @@ internal fun createRuntimeAuth(config: RuntimeConfig): Auth {
 
 private fun ProxyConfig.requireVelocityForwardingSecret(): String =
     velocityForwardingSecret
-        ?: error(
-            "GROUNDS_PROXY_MODE=velocity requires one of " +
-                "GROUNDS_VELOCITY_FORWARDING_SECRET, VELOCITY_FORWARDING_SECRET, " +
-                "GROUNDS_LOBBY_VELOCITY_SECRET, PAPER_VELOCITY_SECRET"
-        )
+        ?: error("GROUNDS_PROXY_MODE=velocity requires GROUNDS_VELOCITY_FORWARDING_SECRET")

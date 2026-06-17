@@ -13,13 +13,7 @@ data class RuntimeConfig(
     val proxy: ProxyConfig = ProxyConfig(),
 ) {
     companion object {
-        private val velocityForwardingSecretNames =
-            listOf(
-                "GROUNDS_VELOCITY_FORWARDING_SECRET",
-                "VELOCITY_FORWARDING_SECRET",
-                "GROUNDS_LOBBY_VELOCITY_SECRET",
-                "PAPER_VELOCITY_SECRET",
-            )
+        private const val velocityForwardingSecretName = "GROUNDS_VELOCITY_FORWARDING_SECRET"
 
         fun fromEnvironment(env: RuntimeEnv = RuntimeEnv.system()): RuntimeConfig {
             return RuntimeConfig(
@@ -56,10 +50,9 @@ data class RuntimeConfig(
 
         private fun parseProxyConfig(env: RuntimeEnv): ProxyConfig {
             val mode = env.choice("GROUNDS_PROXY_MODE", ProxyMode.AUTO, ::parseProxyMode)
-            val secret = env.firstString(velocityForwardingSecretNames)
+            val secret = env.string(velocityForwardingSecretName, "").takeIf { it.isNotEmpty() }
             require(!(mode == ProxyMode.VELOCITY && secret == null)) {
-                "GROUNDS_PROXY_MODE=velocity requires one of " +
-                    velocityForwardingSecretNames.joinToString()
+                "GROUNDS_PROXY_MODE=velocity requires $velocityForwardingSecretName"
             }
             return ProxyConfig(mode = mode, velocityForwardingSecret = secret)
         }
