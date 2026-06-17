@@ -7,6 +7,7 @@ import gg.grounds.runtime.GroundsModuleProvider
 import gg.grounds.runtime.GroundsServerContext
 import gg.grounds.runtime.RuntimeEnvironment
 import gg.grounds.runtime.ServerType
+import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
 import net.minestom.server.event.Event
 import net.minestom.server.event.EventNode
@@ -25,17 +26,19 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
         started = true
 
         logger.info(
-            "Starting Grounds server (serverType={}, environment={}, bind={}:{}, brand={}, moduleCount={})",
+            "Starting Grounds server (serverType={}, environment={}, bind={}:{}, brand={}, onlineMode={}, proxyMode={}, moduleCount={})",
             config.serverType,
             config.environment,
             config.host,
             config.port,
             config.serverBrand,
+            config.onlineMode,
+            config.proxy.mode,
             modules.size,
         )
         logger.info("Activated Grounds modules: {}", modules.joinToString { it.id })
 
-        val minecraftServer = MinecraftServer.init()
+        val minecraftServer = MinecraftServer.init(createRuntimeAuth(config))
         applyRuntimeBrand(config)
         val context = DefaultGroundsServerContext(config, services, shutdownHooks)
 
@@ -82,7 +85,7 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
 
     class Builder {
         private val logger = LoggerFactory.getLogger(Builder::class.java)
-        private var config: RuntimeConfig = RuntimeConfig.fromEnvironment()
+        private var config: RuntimeConfig? = null
         private val modules = mutableListOf<GroundsModule>()
         private val providers = mutableListOf<GroundsModuleProvider>()
         private val discoveredProviders = mutableListOf<GroundsModuleProvider>()
@@ -130,6 +133,7 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
         }
 
         fun build(): GroundsServer {
+            val config = config ?: RuntimeConfig.fromEnvironment()
             val selectedDiscoveredProviders = resolveSelectedDiscoveredProviders()
             val activeProviders = providers + selectedDiscoveredProviders
             logger.info(
@@ -176,3 +180,21 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
 internal fun applyRuntimeBrand(config: RuntimeConfig) {
     MinecraftServer.setBrandName(config.serverBrand)
 }
+
+internal fun createRuntimeAuth(config: RuntimeConfig): Auth {
+    return when (config.proxy.mode) {
+        ProxyMode.AUTO ->
+            config.proxy.velocityForwardingSecret?.let { secret -> Auth.Velocity(secret) }
+                ?: if (config.onlineMode) Auth.Online() else Auth.Offline()
+        ProxyMode.VELOCITY -> Auth.Velocity(config.proxy.requireVelocityForwardingSecret())
+        ProxyMode.OFFLINE -> Auth.Offline()
+    }
+}
+
+private fun ProxyConfig.requireVelocityForwardingSecret(): String =
+    velocityForwardingSecret
+        ?: error(
+            "GROUNDS_PROXY_MODE=velocity requires one of " +
+                "GROUNDS_VELOCITY_FORWARDING_SECRET, VELOCITY_FORWARDING_SECRET, " +
+                "GROUNDS_LOBBY_VELOCITY_SECRET, PAPER_VELOCITY_SECRET"
+        )

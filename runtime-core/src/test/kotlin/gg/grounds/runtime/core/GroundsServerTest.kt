@@ -5,6 +5,7 @@ import gg.grounds.runtime.GroundsModuleProvider
 import gg.grounds.runtime.GroundsServerContext
 import gg.grounds.runtime.RuntimeEnvironment
 import gg.grounds.runtime.ServerType
+import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertThrows
@@ -22,6 +23,7 @@ class GroundsServerTest {
                         "GROUNDS_BIND_HOST" to "127.0.0.1",
                         "GROUNDS_BIND_PORT" to "25566",
                         "GROUNDS_SERVER_BRAND" to "Grounds Test",
+                        "GROUNDS_ONLINE_MODE" to "false",
                     )
                 )
             )
@@ -31,6 +33,133 @@ class GroundsServerTest {
         assertEquals("127.0.0.1", config.host)
         assertEquals(25566, config.port)
         assertEquals("Grounds Test", config.serverBrand)
+        assertEquals(false, config.onlineMode)
+    }
+
+    @Test
+    fun `runtime config parses explicit velocity proxy mode`() {
+        val config =
+            RuntimeConfig.fromEnvironment(
+                RuntimeEnv.of(
+                    mapOf(
+                        "GROUNDS_PROXY_MODE" to "velocity",
+                        "GROUNDS_VELOCITY_FORWARDING_SECRET" to "secret-value",
+                    )
+                )
+            )
+
+        assertEquals(ProxyMode.VELOCITY, config.proxy.mode)
+        assertEquals("secret-value", config.proxy.velocityForwardingSecret)
+    }
+
+    @Test
+    fun `runtime config reads legacy velocity forwarding secret aliases`() {
+        val config =
+            RuntimeConfig.fromEnvironment(
+                RuntimeEnv.of(mapOf("GROUNDS_LOBBY_VELOCITY_SECRET" to "legacy-secret"))
+            )
+
+        assertEquals(ProxyMode.AUTO, config.proxy.mode)
+        assertEquals("legacy-secret", config.proxy.velocityForwardingSecret)
+    }
+
+    @Test
+    fun `runtime config rejects forced velocity mode without forwarding secret`() {
+        val error =
+            assertThrows(IllegalArgumentException::class.java) {
+                RuntimeConfig.fromEnvironment(
+                    RuntimeEnv.of(mapOf("GROUNDS_PROXY_MODE" to "velocity"))
+                )
+            }
+
+        assertEquals(
+            "GROUNDS_PROXY_MODE=velocity requires one of GROUNDS_VELOCITY_FORWARDING_SECRET, VELOCITY_FORWARDING_SECRET, GROUNDS_LOBBY_VELOCITY_SECRET, PAPER_VELOCITY_SECRET",
+            error.message,
+        )
+    }
+
+    @Test
+    fun `runtime config defaults online mode to true`() {
+        val config = RuntimeConfig.fromEnvironment(RuntimeEnv.of(emptyMap()))
+
+        assertEquals(true, config.onlineMode)
+    }
+
+    @Test
+    fun `runtime config rejects invalid online mode`() {
+        val error =
+            assertThrows(IllegalArgumentException::class.java) {
+                RuntimeConfig.fromEnvironment(
+                    RuntimeEnv.of(mapOf("GROUNDS_ONLINE_MODE" to "sometimes"))
+                )
+            }
+
+        assertEquals("unsupported GROUNDS_ONLINE_MODE: sometimes", error.message)
+    }
+
+    @Test
+    fun `runtime auth uses online mode when proxy mode is auto without secret`() {
+        val auth = createRuntimeAuth(testConfig(proxy = ProxyConfig(mode = ProxyMode.AUTO)))
+
+        assertEquals(Auth.Online::class.java, auth.javaClass)
+    }
+
+    @Test
+    fun `runtime auth uses offline mode when online mode is disabled`() {
+        val auth =
+            createRuntimeAuth(
+                testConfig(onlineMode = false, proxy = ProxyConfig(mode = ProxyMode.AUTO))
+            )
+
+        assertEquals(Auth.Offline::class.java, auth.javaClass)
+    }
+
+    @Test
+    fun `runtime auth uses velocity mode when proxy mode is auto with forwarding secret`() {
+        val auth =
+            createRuntimeAuth(
+                testConfig(
+                    proxy =
+                        ProxyConfig(
+                            mode = ProxyMode.AUTO,
+                            velocityForwardingSecret = "secret-value",
+                        )
+                )
+            )
+
+        assertEquals(Auth.Velocity::class.java, auth.javaClass)
+    }
+
+    @Test
+    fun `runtime auth uses velocity mode when proxy mode is forced`() {
+        val auth =
+            createRuntimeAuth(
+                testConfig(
+                    proxy =
+                        ProxyConfig(
+                            mode = ProxyMode.VELOCITY,
+                            velocityForwardingSecret = "secret-value",
+                        )
+                )
+            )
+
+        assertEquals(Auth.Velocity::class.java, auth.javaClass)
+    }
+
+    @Test
+    fun `runtime auth uses offline mode when proxy mode is forced offline`() {
+        val auth =
+            createRuntimeAuth(
+                testConfig(
+                    proxy =
+                        ProxyConfig(
+                            mode = ProxyMode.OFFLINE,
+                            velocityForwardingSecret = "secret-value",
+                        )
+                )
+            )
+
+        assertEquals(Auth.Offline::class.java, auth.javaClass)
     }
 
     @Test
@@ -88,11 +217,17 @@ class GroundsServerTest {
         assertEquals(listOf("grounds.selected-discovered"), server.installedModuleIds())
     }
 
-    private fun testConfig(serverBrand: String = "Grounds"): RuntimeConfig =
+    private fun testConfig(
+        serverBrand: String = "Grounds",
+        onlineMode: Boolean = true,
+        proxy: ProxyConfig = ProxyConfig(),
+    ): RuntimeConfig =
         RuntimeConfig(
             serverType = ServerType.MINIGAME,
             environment = RuntimeEnvironment.TEST,
             serverBrand = serverBrand,
+            onlineMode = onlineMode,
+            proxy = proxy,
         )
 
     private fun testModule(id: String): GroundsModule =

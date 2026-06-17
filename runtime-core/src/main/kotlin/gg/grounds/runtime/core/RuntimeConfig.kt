@@ -9,8 +9,18 @@ data class RuntimeConfig(
     val host: String = "0.0.0.0",
     val port: Int = 25565,
     val serverBrand: String = "Grounds",
+    val onlineMode: Boolean = true,
+    val proxy: ProxyConfig = ProxyConfig(),
 ) {
     companion object {
+        private val velocityForwardingSecretNames =
+            listOf(
+                "GROUNDS_VELOCITY_FORWARDING_SECRET",
+                "VELOCITY_FORWARDING_SECRET",
+                "GROUNDS_LOBBY_VELOCITY_SECRET",
+                "PAPER_VELOCITY_SECRET",
+            )
+
         fun fromEnvironment(env: RuntimeEnv = RuntimeEnv.system()): RuntimeConfig {
             return RuntimeConfig(
                 serverType =
@@ -19,6 +29,8 @@ data class RuntimeConfig(
                 host = env.string("GROUNDS_BIND_HOST", "0.0.0.0"),
                 port = env.int("GROUNDS_BIND_PORT", 25565),
                 serverBrand = env.string("GROUNDS_SERVER_BRAND", "Grounds"),
+                onlineMode = env.boolean("GROUNDS_ONLINE_MODE", true),
+                proxy = parseProxyConfig(env),
             )
         }
 
@@ -41,5 +53,37 @@ data class RuntimeConfig(
                 else -> null
             }
         }
+
+        private fun parseProxyConfig(env: RuntimeEnv): ProxyConfig {
+            val mode = env.choice("GROUNDS_PROXY_MODE", ProxyMode.AUTO, ::parseProxyMode)
+            val secret = env.firstString(velocityForwardingSecretNames)
+            if (mode == ProxyMode.VELOCITY && secret == null) {
+                throw IllegalArgumentException(
+                    "GROUNDS_PROXY_MODE=velocity requires one of " +
+                        velocityForwardingSecretNames.joinToString()
+                )
+            }
+            return ProxyConfig(mode = mode, velocityForwardingSecret = secret)
+        }
+
+        private fun parseProxyMode(value: String): ProxyMode? {
+            return when (value.lowercase()) {
+                "auto" -> ProxyMode.AUTO
+                "velocity" -> ProxyMode.VELOCITY
+                "offline" -> ProxyMode.OFFLINE
+                else -> null
+            }
+        }
     }
+}
+
+data class ProxyConfig(
+    val mode: ProxyMode = ProxyMode.AUTO,
+    val velocityForwardingSecret: String? = null,
+)
+
+enum class ProxyMode {
+    AUTO,
+    VELOCITY,
+    OFFLINE,
 }
