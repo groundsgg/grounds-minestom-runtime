@@ -11,7 +11,7 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:6.1.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    runtimeOnly("gg.grounds:plugin-agones-minestom:0.5.1")
+    runtimeOnly("gg.grounds:plugin-agones-minestom:0.6.0")
     runtimeOnly("org.slf4j:slf4j-simple:2.0.18")
 }
 

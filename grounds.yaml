@@ -7,4 +7,4 @@ build:
 modules:
   - id: plugin-agones
     variant: minestom
-    source: github:groundsgg/plugin-agones@v0.5.1:plugin-agones-minestom.jar
+    source: github:groundsgg/plugin-agones@v0.6.0:plugin-agones-minestom.jar
