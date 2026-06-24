@@ -1,11 +1,13 @@
 plugins { id("gg.grounds.minestom-conventions") }
 
 dependencies {
+    implementation(platform("gg.grounds:grounds-dependencies:0.1.0"))
+
     api(project(":runtime-api"))
     implementation("gg.grounds:library-jvm-modules-module-core:0.1.0")
-    implementation("net.minestom:minestom:2026.06.05-26.1.2")
-    implementation("org.slf4j:slf4j-api:2.0.18")
+    implementation("net.minestom:minestom")
+    implementation("org.slf4j:slf4j-api")
 
-    testImplementation("org.junit.jupiter:junit-jupiter:6.1.0")
+    testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
