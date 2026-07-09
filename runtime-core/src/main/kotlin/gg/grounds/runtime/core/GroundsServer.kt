@@ -2,6 +2,7 @@ package gg.grounds.runtime.core
 
 import gg.grounds.modules.ServiceRegistry
 import gg.grounds.modules.core.ServiceLoaderModuleDiscovery
+import gg.grounds.runtime.ActiveGroundsModuleProvider
 import gg.grounds.runtime.GroundsModule
 import gg.grounds.runtime.GroundsModuleProvider
 import gg.grounds.runtime.GroundsServerContext
@@ -18,6 +19,7 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
     private val logger = LoggerFactory.getLogger(GroundsServer::class.java)
     private val modules = composition.modules
     private val services = composition.services
+    private val activeModuleProviders = composition.activeModuleProviders
     private val shutdownHooks = mutableListOf<() -> Unit>()
     private var started = false
 
@@ -40,7 +42,8 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
 
         val minecraftServer = MinecraftServer.init(createRuntimeAuth(config))
         applyRuntimeBrand(config)
-        val context = DefaultGroundsServerContext(config, services, shutdownHooks)
+        val context =
+            DefaultGroundsServerContext(config, services, activeModuleProviders, shutdownHooks)
 
         modules.forEach { installed ->
             logger.info("Installing Grounds module {}", installed.id)
@@ -71,6 +74,7 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
     private class DefaultGroundsServerContext(
         private val config: RuntimeConfig,
         override val services: ServiceRegistry,
+        override val activeModuleProviders: List<ActiveGroundsModuleProvider>,
         private val shutdownHooks: MutableList<() -> Unit>,
     ) : GroundsServerContext {
         override val serverType: ServerType = config.serverType

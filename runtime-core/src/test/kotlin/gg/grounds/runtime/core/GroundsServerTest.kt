@@ -5,6 +5,7 @@ import gg.grounds.runtime.GroundsModuleProvider
 import gg.grounds.runtime.GroundsServerContext
 import gg.grounds.runtime.RuntimeEnvironment
 import gg.grounds.runtime.ServerType
+import java.util.concurrent.atomic.AtomicReference
 import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -206,6 +207,32 @@ class GroundsServerTest {
         assertEquals(listOf("grounds.selected-discovered"), server.installedModuleIds())
     }
 
+    @Test
+    fun `context exposes selected providers matching the server type`() {
+        val capturedContext = AtomicReference<GroundsServerContext>()
+        val server =
+            GroundsServer.builder()
+                .config(testConfig())
+                .use(contextCapturingModule(capturedContext))
+                .use(testProvider("grounds.used", version = "1.2.3"))
+                .use(
+                    testProvider("grounds.wrong-server-type", serverTypes = setOf(ServerType.LOBBY))
+                )
+                .discoverProviders()
+                .useProvider("grounds.selected-discovered")
+                .build()
+
+        server.start()
+        try {
+            assertEquals(
+                listOf("grounds.used", "grounds.selected-discovered"),
+                capturedContext.get().activeModuleProviders.map { it.id },
+            )
+        } finally {
+            server.stop()
+        }
+    }
+
     private fun testConfig(
         serverBrand: String = "Grounds",
         onlineMode: Boolean = true,
@@ -226,11 +253,26 @@ class GroundsServerTest {
             override fun install(ctx: GroundsServerContext) = Unit
         }
 
-    private fun testProvider(id: String): GroundsModuleProvider =
+    private fun contextCapturingModule(
+        capturedContext: AtomicReference<GroundsServerContext>
+    ): GroundsModule =
+        object : GroundsModule {
+            override val id: String = "grounds.context-capturing"
+
+            override fun install(ctx: GroundsServerContext) {
+                capturedContext.set(ctx)
+            }
+        }
+
+    private fun testProvider(
+        id: String,
+        version: String = "local",
+        serverTypes: Set<ServerType> = setOf(ServerType.MINIGAME),
+    ): GroundsModuleProvider =
         object : GroundsModuleProvider {
             override val id: String = id
-            override val version: String = "local"
-            override val serverTypes: Set<ServerType> = setOf(ServerType.MINIGAME)
+            override val version: String = version
+            override val serverTypes: Set<ServerType> = serverTypes
 
             override fun create(): GroundsModule = testModule(id)
         }
