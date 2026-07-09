@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.2.0...v0.3.0) (2026-07-09)
+
+
+### Features
+
+* expose active module providers ([#11](https://github.com/groundsgg/grounds-minestom-runtime/issues/11)) ([2b574ba](https://github.com/groundsgg/grounds-minestom-runtime/commit/2b574ba2369c8e93aca34fd6314935a35899ee97))
+
 ## [0.2.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.1.0...v0.2.0) (2026-06-29)
 
 
