@@ -3,12 +3,14 @@ package gg.grounds.runtime.core
 import gg.grounds.modules.ServiceRegistry
 import gg.grounds.modules.core.DefaultServiceRegistry
 import gg.grounds.modules.core.ModuleGraphValidator
+import gg.grounds.runtime.ActiveGroundsModuleProvider
 import gg.grounds.runtime.GroundsModule
 import gg.grounds.runtime.GroundsModuleProvider
 
 internal data class GroundsModuleComposition(
     val modules: List<InstalledGroundsModule>,
     val services: ServiceRegistry,
+    val activeModuleProviders: List<ActiveGroundsModuleProvider>,
 )
 
 internal data class InstalledGroundsModule(val id: String, val module: GroundsModule)
@@ -20,18 +22,29 @@ internal object GroundsModuleComposer {
         providers: List<GroundsModuleProvider>,
         services: ServiceRegistry = DefaultServiceRegistry(),
     ): GroundsModuleComposition {
-        val providerModules = composeProviderModules(config, providers, services)
+        val matchingProviders = providers.filter { config.serverType in it.serverTypes }
+        val providerModules = composeProviderModules(matchingProviders, services)
         val directModules = modules.map { module -> InstalledGroundsModule(module.id, module) }
+        val activeModuleProviders =
+            matchingProviders.map { provider ->
+                ActiveGroundsModuleProvider(
+                    id = provider.id,
+                    version = provider.version,
+                    classLoader = requireNotNull(provider.javaClass.classLoader),
+                )
+            }
 
-        return GroundsModuleComposition(providerModules + directModules, services)
+        return GroundsModuleComposition(
+            providerModules + directModules,
+            services,
+            activeModuleProviders,
+        )
     }
 
     private fun composeProviderModules(
-        config: RuntimeConfig,
-        providers: List<GroundsModuleProvider>,
+        matchingProviders: List<GroundsModuleProvider>,
         services: ServiceRegistry,
     ): List<InstalledGroundsModule> {
-        val matchingProviders = providers.filter { config.serverType in it.serverTypes }
         if (matchingProviders.isEmpty()) {
             return emptyList()
         }
