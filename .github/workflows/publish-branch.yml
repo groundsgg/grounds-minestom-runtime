@@ -1,0 +1,64 @@
+# Publishes the runtime as a SNAPSHOT on every push to main (and to a feature
+# branch), so a consumer can build against a change the moment it lands.
+#
+# Without this the runtime only ever published on a tag, which meant a gamemode
+# could not compile against a new runtime module until someone cut a release —
+# and a release cannot be validated by the consumer that needs it. That is a
+# deadlock, and it is why this exists.
+#
+# Deliberately no per-module matrix: `./gradlew publish` publishes every module
+# the build knows about, so a NEW module cannot be silently left out. (The
+# contracts repo hardcodes its module list and has been bitten by exactly that:
+# the module publishes nothing, and the consumer cannot resolve it.)
+name: Publish Branch Packages
+
+on:
+  push:
+    branches:
+      - main
+      - "feat/**"
+      - "fix/**"
+      - "refactor/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  # A newer push supersedes an older one: publishing a stale commit's artifacts
+  # over a newer commit's would hand consumers a version that never existed.
+  group: publish-branch-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: arc-linux
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: "temurin"
+          java-version: "25"
+          cache: "gradle"
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          ref="${{ github.ref }}"
+          branch="${ref#refs/heads/}"
+          # Anything that is not a plain identifier becomes a dash, so a branch
+          # like feat/foo_bar resolves to a legal Maven version.
+          sanitized=$(echo "$branch" | sed 's/[^a-zA-Z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//')
+          echo "version=${sanitized}-SNAPSHOT" >> "$GITHUB_OUTPUT"
+
+      - name: Publish
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./gradlew publish -PversionOverride="${{ steps.version.outputs.version }}"
