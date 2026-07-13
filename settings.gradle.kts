@@ -1,6 +1,12 @@
 rootProject.name = "grounds-minestom-runtime"
 
-include("runtime-api", "runtime-core", "runtime-testkit", "examples:minigame-agones")
+include(
+    "runtime-api",
+    "runtime-core",
+    "runtime-match",
+    "runtime-testkit",
+    "examples:minigame-agones",
+)
 
 pluginManagement {
     repositories {
