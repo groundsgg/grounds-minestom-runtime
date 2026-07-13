@@ -45,6 +45,19 @@ jobs:
           java-version: "25"
           cache: "gradle"
 
+      # settings.gradle.kts resolves the groundsgg plugin repo through the
+      # `github.user` / `github.token` Gradle properties, and it does so during
+      # settings evaluation — before any task runs. Passing them as env vars is
+      # too late and too indirect; the shared gradle-publish workflow writes this
+      # same file for the same reason.
+      - name: Gradle credentials
+        run: |
+          mkdir -p ~/.gradle
+          {
+            echo "github.user=${{ github.actor }}"
+            echo "github.token=${{ secrets.GITHUB_TOKEN }}"
+          } > ~/.gradle/gradle.properties
+
       - name: Determine version
         id: version
         shell: bash
