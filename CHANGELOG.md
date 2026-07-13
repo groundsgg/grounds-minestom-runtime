@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.3.0...v0.4.0) (2026-07-13)
+
+
+### Features
+
+* **match:** host the matches the matchmaker pushes ([#13](https://github.com/groundsgg/grounds-minestom-runtime/issues/13)) ([5179670](https://github.com/groundsgg/grounds-minestom-runtime/commit/51796709fd5b19fda8ed03dfd264c5a20b1e6312))
+
+
+### Bug Fixes
+
+* **ci:** give the SNAPSHOT publish its Gradle credentials ([#16](https://github.com/groundsgg/grounds-minestom-runtime/issues/16)) ([f538228](https://github.com/groundsgg/grounds-minestom-runtime/commit/f538228c00996928688471ea571c37c91798da8e))
+
 ## [0.3.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.2.0...v0.3.0) (2026-07-09)
 
 
