@@ -13,8 +13,6 @@ permissions:
 jobs:
   publish:
     uses: groundsgg/.github/.github/workflows/gradle-publish.yml@main
-    with:
-      runner: arc-linux
     secrets: inherit
     permissions:
       contents: read
