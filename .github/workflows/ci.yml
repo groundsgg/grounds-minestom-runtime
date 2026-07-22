@@ -14,8 +14,6 @@ permissions:
 jobs:
   build:
     uses: groundsgg/.github/.github/workflows/gradle-ci.yml@main
-    with:
-      runner: arc-linux
     secrets: inherit
     permissions:
       contents: read
