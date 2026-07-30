@@ -1,0 +1,63 @@
+name: Duel image
+
+# The shared docker-gradle-build-push workflow only builds the repo's own image
+# (ghcr.io/<repo>) from the root Dockerfile, so it cannot publish the duel
+# gamemode as its own image. This job does that one thing: build
+# examples/duel/Dockerfile and push ghcr.io/groundsgg/duel.
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: duel-image-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  duel-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/groundsgg/duel
+          tags: |
+            type=match,pattern=v(.*),group=1
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=sha-
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: examples/duel/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          platforms: linux/amd64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # amd64 build inside Docker; GITHUB_USER + a packages-read token feed
+          # the Gradle build that resolves gg.grounds.* from GitHub Packages.
+          build-args: |
+            GITHUB_USER=${{ github.actor }}
+          secrets: |
+            github_token=${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
