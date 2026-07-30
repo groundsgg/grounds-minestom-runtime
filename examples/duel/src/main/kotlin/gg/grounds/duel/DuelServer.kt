@@ -25,16 +25,15 @@ import org.slf4j.LoggerFactory
 /**
  * A 1v1 duel Minestom server the matchmaker drives.
  *
- * service-match allocates one of these, then pushes a match over gRPC (MatchHost,
- * handled by [MatchHostModule]); this builds an arena for it, seats the two
- * players it named, and lets them fight. When one dies the other wins, the arena
- * is torn down and the Agones `matches` counter is decremented so the slot frees.
+ * service-match allocates one of these, then pushes a match over gRPC (MatchHost, handled by
+ * [MatchHostModule]); this builds an arena for it, seats the two players it named, and lets them
+ * fight. When one dies the other wins, the arena is torn down and the Agones `matches` counter is
+ * decremented so the slot frees.
  *
- * Deliberately small. Real combat comes from `gg.grounds.vanilla` (the same PvP
- * the rest of the platform uses) with a single [Vanilla.install]; the only game
- * logic here is "two players in, one death, match over". Ratings are not reported
- * back yet — a match plays and frees its slot, which is what the pipeline needs;
- * ReportMatchResult to service-match is a follow-up.
+ * Deliberately small. Real combat comes from `gg.grounds.vanilla` (the same PvP the rest of the
+ * platform uses) with a single [Vanilla.install]; the only game logic here is "two players in, one
+ * death, match over". Ratings are not reported back yet — a match plays and frees its slot, which
+ * is what the pipeline needs; ReportMatchResult to service-match is a follow-up.
  */
 
 /** One running duel: its arena, and who is in it. */
@@ -46,9 +45,9 @@ private class DuelArena(
 )
 
 /**
- * Holds every running duel and, as the [MatchHandler], turns a pushed match into
- * an arena. One instance is shared between the MatchHost server (which calls
- * [start]) and the Minestom module (which routes joins and reacts to deaths).
+ * Holds every running duel and, as the [MatchHandler], turns a pushed match into an arena. One
+ * instance is shared between the MatchHost server (which calls [start]) and the Minestom module
+ * (which routes joins and reacts to deaths).
  */
 private class DuelService : MatchHandler {
     private val log = LoggerFactory.getLogger(DuelService::class.java)
@@ -113,10 +112,8 @@ private class DuelService : MatchHandler {
     }
 }
 
-private class DuelModule(
-    private val service: DuelService,
-    private val host: MatchHostModule,
-) : GroundsModule {
+private class DuelModule(private val service: DuelService, private val host: MatchHostModule) :
+    GroundsModule {
     private val log = LoggerFactory.getLogger(DuelModule::class.java)
 
     override val id: String = "grounds.duel"
