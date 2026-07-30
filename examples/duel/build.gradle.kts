@@ -17,7 +17,7 @@ repositories {
 }
 
 dependencies {
-    implementation(platform("gg.grounds:grounds-dependencies:0.1.0"))
+    implementation(platform("gg.grounds:grounds-dependencies:1.0.0"))
 
     implementation(project(":runtime-core"))
     // The MatchHost gRPC server + the Agones `matches` counter. This is what
