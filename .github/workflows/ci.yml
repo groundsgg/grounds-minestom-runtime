@@ -11,6 +11,10 @@ permissions:
   contents: read
   packages: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     uses: groundsgg/.github/.github/workflows/gradle-ci.yml@main
