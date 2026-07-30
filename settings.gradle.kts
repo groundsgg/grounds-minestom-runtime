@@ -6,6 +6,7 @@ include(
     "runtime-match",
     "runtime-testkit",
     "examples:minigame-agones",
+    "examples:duel",
 )
 
 pluginManagement {
