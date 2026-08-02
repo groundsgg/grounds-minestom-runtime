@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.4.0...v0.5.0) (2026-08-02)
+
+
+### Features
+
+* **match:** surface the pushed map on PushedMatch ([#21](https://github.com/groundsgg/grounds-minestom-runtime/issues/21)) ([d46e472](https://github.com/groundsgg/grounds-minestom-runtime/commit/d46e4724cea4a74324400a429946184965125599))
+
 ## [0.4.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.3.0...v0.4.0) (2026-07-13)
 
 
