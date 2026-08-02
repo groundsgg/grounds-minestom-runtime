@@ -37,7 +37,7 @@ class MatchHostService(private val registry: MatchRegistry, private val handler:
                 return
             }
 
-        val match = PushedMatch(request.matchId, request.modeId, roster)
+        val match = PushedMatch(request.matchId, request.modeId, roster, request.mapAddress)
         if (registry.accept(match, handler)) {
             reply(responseObserver, accepted = true, reason = "")
         } else {
