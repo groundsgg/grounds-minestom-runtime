@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.5.0...v0.6.0) (2026-08-03)
+
+
+### Features
+
+* **metrics:** publish Minestom server metrics on a Prometheus endpoint ([#23](https://github.com/groundsgg/grounds-minestom-runtime/issues/23)) ([0e038b0](https://github.com/groundsgg/grounds-minestom-runtime/commit/0e038b091a376fe6590d34acb7c15d7bbb4f9a0e))
+
 ## [0.5.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.4.0...v0.5.0) (2026-08-02)
 
 
