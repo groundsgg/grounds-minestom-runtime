@@ -58,6 +58,40 @@ ctx.services.register<MatchmakingService>(DefaultMatchmakingService())
 val players = ctx.services.require<PlayerService>()
 ```
 
+## Metrics
+
+Every server can publish Prometheus metrics about itself. Off unless asked for,
+because a scrape target nobody collects is only a cost.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `GROUNDS_METRICS_ENABLED` | `false` | Bind the endpoint at all |
+| `GROUNDS_METRICS_HOST` | `0.0.0.0` | Bind address |
+| `GROUNDS_METRICS_PORT` | `9000` | Must differ from `GROUNDS_BIND_PORT` |
+| `GROUNDS_METRICS_PATH` | `/metrics` | Path served; everything else answers 404 |
+
+What it publishes, on top of Micrometer's JVM and process binders
+(`jvm_memory_used_bytes`, `jvm_gc_pause_seconds`, `process_cpu_usage`, … — the
+same names the Quarkus services use, so one query covers both):
+
+```text
+minecraft_tick_duration_seconds      Timer. _count is ticks (rate = TPS),
+                                     _sum/_count is mean MSPT, _max is the spike
+minecraft_tick_acquisition_seconds   Timer. Time a tick waited for threads
+minecraft_players_online             Players in the world
+minecraft_instances                  Instances held (one per live match)
+minecraft_entities                   Entities across every instance
+minecraft_chunks_loaded              Chunks loaded across every instance
+```
+
+Every series carries `server_type` (`lobby` / `minigame`) and `environment`.
+`cluster`, `pod` and `app` are added by the satellite's metrics agent.
+
+In Kubernetes the port must also be a **declared `containerPort`** and the pod
+must carry `prometheus.io/scrape=true` — `grounds-gamemode`'s `metrics.enabled`
+does both. Failing to bind is logged and the server keeps running: a game server
+without metrics is degraded, one that refuses to boot is an outage.
+
 ## License
 
 Licensed under the Apache License, Version 2.0.

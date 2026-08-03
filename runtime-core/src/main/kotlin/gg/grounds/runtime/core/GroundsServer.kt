@@ -8,6 +8,7 @@ import gg.grounds.runtime.GroundsModuleProvider
 import gg.grounds.runtime.GroundsServerContext
 import gg.grounds.runtime.RuntimeEnvironment
 import gg.grounds.runtime.ServerType
+import gg.grounds.runtime.core.metrics.RuntimeMetrics
 import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
 import net.minestom.server.event.Event
@@ -22,6 +23,7 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
     private val activeModuleProviders = composition.activeModuleProviders
     private val shutdownHooks = mutableListOf<() -> Unit>()
     private var started = false
+    private var metrics: RuntimeMetrics? = null
 
     fun start() {
         check(!started) { "server is already started" }
@@ -42,6 +44,7 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
 
         val minecraftServer = MinecraftServer.init(createRuntimeAuth(config))
         applyRuntimeBrand(config)
+        startMetrics()
         val context =
             DefaultGroundsServerContext(config, services, activeModuleProviders, shutdownHooks)
 
@@ -68,7 +71,41 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
             installed.module.stop()
         }
         shutdownHooks.asReversed().forEach { it.invoke() }
+        // After the modules, so a module's own shutdown is still measurable, and before Minestom
+        // goes down, because the gauges read it.
+        metrics?.let { runCatching { it.close() } }
+        metrics = null
         MinecraftServer.stopCleanly()
+    }
+
+    /**
+     * Bring up the Prometheus endpoint, if this server was asked for one.
+     *
+     * Runs after `MinecraftServer.init()` (the tick listener needs the global event handler) and
+     * before the modules install, so a module that hangs on startup is still visible from outside.
+     *
+     * A failure here does **not** stop the server: a game server that cannot publish metrics is
+     * degraded, and a game server that refuses to boot because a port was taken is an outage. The
+     * absence is itself the alert — `up` for the pod goes missing.
+     */
+    private fun startMetrics() {
+        if (!config.metrics.enabled) {
+            logger.info("Metrics endpoint disabled (set GROUNDS_METRICS_ENABLED=true to publish)")
+            return
+        }
+        metrics =
+            runCatching {
+                    RuntimeMetrics.start(config.metrics, config.serverType, config.environment)
+                }
+                .onFailure { failure ->
+                    logger.error(
+                        "Failed to start the metrics endpoint on {}:{} — continuing without it",
+                        config.metrics.host,
+                        config.metrics.port,
+                        failure,
+                    )
+                }
+                .getOrNull()
     }
 
     private class DefaultGroundsServerContext(
