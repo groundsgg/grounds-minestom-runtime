@@ -23,6 +23,13 @@ class MatchRegistry(private val counters: MatchCounters) {
      * retries on a lost reply, and re-running the handler would build a second arena for a match
      * that is already running. If [handler] throws, the match is not registered — the server is
      * refusing the match, not hosting one it never actually built.
+     *
+     * **A refusal releases the slot.** Allocation already incremented the counter before this call;
+     * if the server then declines the match, nothing will ever call [finish] for it, so the slot
+     * would be advertised as taken forever. One such refusal per round is all it takes to retire a
+     * server: it stays `Ready`, reports itself full, and every later allocation fails against it
+     * with "no server with a free slot" while it sits there empty. That is not hypothetical — it
+     * took stage down in both regions for hours.
      */
     fun accept(match: PushedMatch, handler: MatchHandler): Boolean {
         return try {
@@ -35,14 +42,20 @@ class MatchRegistry(private val counters: MatchCounters) {
             live.computeIfAbsent(match.matchId) {
                 try {
                     handler.start(match)
-                } catch (e: Exception) {
-                    throw HandlerRefusedException(e)
+                } catch (t: Throwable) {
+                    // Throwable, not Exception. A gamemode that fails to start because a class is
+                    // missing from its jar throws NoClassDefFoundError, which is an Error — it went
+                    // straight past a `catch (e: Exception)` here, killed the gRPC worker thread,
+                    // and left the slot leaked because nothing below ran. An Error out of a handler
+                    // is exactly as much a refusal as an exception is.
+                    throw HandlerRefusedException(t)
                 }
                 match
             }
             true
         } catch (e: HandlerRefusedException) {
             logger.error("Match handler refused match {}", match.matchId, e.cause)
+            counters.decrement()
             false
         }
     }
