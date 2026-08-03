@@ -11,20 +11,23 @@ data class RuntimeConfig(
     val serverBrand: String = "Grounds",
     val onlineMode: Boolean = true,
     val proxy: ProxyConfig = ProxyConfig(),
+    val metrics: MetricsConfig = MetricsConfig(),
 ) {
     companion object {
         private const val velocityForwardingSecretName = "GROUNDS_VELOCITY_FORWARDING_SECRET"
 
         fun fromEnvironment(env: RuntimeEnv = RuntimeEnv.system()): RuntimeConfig {
+            val minecraftPort = env.int("GROUNDS_BIND_PORT", 25565)
             return RuntimeConfig(
                 serverType =
                     env.choice("GROUNDS_SERVER_TYPE", ServerType.MINIGAME, ::parseServerType),
                 environment = env.choice("GROUNDS_ENV", RuntimeEnvironment.DEV, ::parseEnvironment),
                 host = env.string("GROUNDS_BIND_HOST", "0.0.0.0"),
-                port = env.int("GROUNDS_BIND_PORT", 25565),
+                port = minecraftPort,
                 serverBrand = env.string("GROUNDS_SERVER_BRAND", "Grounds"),
                 onlineMode = env.boolean("GROUNDS_ONLINE_MODE", true),
                 proxy = parseProxyConfig(env),
+                metrics = parseMetricsConfig(env, minecraftPort),
             )
         }
 
@@ -65,12 +68,47 @@ data class RuntimeConfig(
                 else -> null
             }
         }
+
+        private fun parseMetricsConfig(env: RuntimeEnv, minecraftPort: Int): MetricsConfig {
+            val config =
+                MetricsConfig(
+                    enabled = env.boolean("GROUNDS_METRICS_ENABLED", false),
+                    host = env.string("GROUNDS_METRICS_HOST", "0.0.0.0"),
+                    port = env.int("GROUNDS_METRICS_PORT", 9000),
+                    path = env.string("GROUNDS_METRICS_PATH", "/metrics"),
+                )
+            require(config.path.startsWith("/")) {
+                "GROUNDS_METRICS_PATH must start with '/': ${config.path}"
+            }
+            // Sharing the Minecraft port fails at bind time with "Address already in use", which
+            // names neither setting. Say which two collided instead.
+            require(config.port != minecraftPort) {
+                "GROUNDS_METRICS_PORT must differ from GROUNDS_BIND_PORT: ${config.port}"
+            }
+            return config
+        }
     }
 }
 
 data class ProxyConfig(
     val mode: ProxyMode = ProxyMode.AUTO,
     val velocityForwardingSecret: String? = null,
+)
+
+/**
+ * The Prometheus endpoint the satellite's metrics agent scrapes.
+ *
+ * Off by default: a scrape target nobody asked for is a metrics bill, and the agent only collects
+ * pods that carry `prometheus.io/scrape=true` anyway — so this switch and the chart's have to agree
+ * before anything is published. `port` must be a **declared containerPort** on the pod as well: the
+ * agent keeps only the discovered target whose port matches the annotation, so a metrics port the
+ * pod spec does not name is never scraped.
+ */
+data class MetricsConfig(
+    val enabled: Boolean = false,
+    val host: String = "0.0.0.0",
+    val port: Int = 9000,
+    val path: String = "/metrics",
 )
 
 enum class ProxyMode {
