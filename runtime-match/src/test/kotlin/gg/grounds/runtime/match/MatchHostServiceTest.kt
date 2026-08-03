@@ -65,6 +65,8 @@ class MatchHostServiceTest {
 
     private object NoopCounters : MatchCounters {
         override fun decrement() {}
+
+        override fun reconcile(live: Int) {}
     }
 
     private class CapturingObserver : StreamObserver<StartMatchReply> {
