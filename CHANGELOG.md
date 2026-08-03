@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.6.0...v0.6.1) (2026-08-03)
+
+
+### Bug Fixes
+
+* **match:** give back the slot when a match is refused, and repair drift ([#25](https://github.com/groundsgg/grounds-minestom-runtime/issues/25)) ([686043b](https://github.com/groundsgg/grounds-minestom-runtime/commit/686043bd269f7fcdf79646734eb63bfcb40ea4a3))
+
 ## [0.6.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.5.0...v0.6.0) (2026-08-03)
 
 
