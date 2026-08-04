@@ -1,6 +1,8 @@
-// This module is gRPC-only — it receives StartMatch and hands the roster to
-// whatever gamemode wired it, and never touches Minestom itself. So it builds on
-// gg.grounds.grpc-conventions rather than gg.grounds.minestom-conventions;
+// This module is transport-only — it receives StartMatch and hands the roster to
+// whatever gamemode wired it, and never touches Minestom itself. The wire is NATS
+// now, but the payloads are still the protobuf messages from
+// library-grpc-contracts-match, so it builds on gg.grounds.grpc-conventions
+// rather than gg.grounds.minestom-conventions;
 // grpc-conventions already layers on gg.grounds.kotlin-conventions and wires the
 // protoc/grpc-java codegen toolchain (see plugin-config/common and
 // plugin-social/common for the same recipe against other
@@ -34,11 +36,12 @@ dependencies {
     api(project(":runtime-api"))
 
     // grpc-conventions already adds grpc-stub/grpc-protobuf (the generated code
-    // needs them to compile) and protobuf-java as compileOnly. This module runs an
-    // actual gRPC server, so it additionally needs a transport (Netty) and
-    // protobuf-java on the runtime classpath.
-    implementation("io.grpc:grpc-netty-shaded:1.81.0")
+    // needs them to compile) and protobuf-java as compileOnly. This module no
+    // longer runs a gRPC server so it needs no gRPC transport, but it still
+    // parses and serialises the contract's messages, so protobuf-java has to be
+    // on the runtime classpath.
     implementation("com.google.protobuf:protobuf-java:4.34.1")
+    implementation("io.nats:jnats:2.26.0")
     // Generated grpc-java code references javax.annotation.Generated.
     implementation("javax.annotation:javax.annotation-api:1.3.2")
     implementation("org.slf4j:slf4j-api")

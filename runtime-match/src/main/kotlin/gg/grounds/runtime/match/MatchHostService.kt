@@ -1,59 +1,59 @@
 package gg.grounds.runtime.match
 
-import gg.grounds.grpc.match.MatchHostGrpc
 import gg.grounds.grpc.match.StartMatchReply
 import gg.grounds.grpc.match.StartMatchRequest
-import io.grpc.stub.StreamObserver
 import java.util.UUID
 import org.slf4j.LoggerFactory
 
 /**
- * The gRPC side of the matchmaker's push: turn a [StartMatchRequest] into a [PushedMatch] and hand
+ * Turns a [StartMatchRequest] the matchmaker pushed at this server into a [PushedMatch] and hands
  * it to [MatchRegistry.accept].
  *
- * Always replies via [StreamObserver.onNext] followed by [StreamObserver.onCompleted] — including
- * on a refusal — because leaving the call hanging or throwing out of this method gives the
- * matchmaker no way to distinguish "refused" from "lost".
+ * Transport-free on purpose: [MatchHostModule] owns the NATS subscription and only ever asks this
+ * class the one question. That the exchange is request-reply rather than a fire-and-forget event is
+ * the whole point — the reply is what the matchmaker uses to decide whether to route the players
+ * here or put them back on the queue, so a match nobody answered for has to end up back in the
+ * queue rather than nowhere.
+ *
+ * Which is also why [startMatch] always returns a reply and never throws: a thrown exception leaves
+ * the matchmaker unable to tell "refused" from "lost".
  */
-class MatchHostService(private val registry: MatchRegistry, private val handler: MatchHandler) :
-    MatchHostGrpc.MatchHostImplBase() {
+class MatchHostService(private val registry: MatchRegistry, private val handler: MatchHandler) {
     private val logger = LoggerFactory.getLogger(MatchHostService::class.java)
 
-    override fun startMatch(
-        request: StartMatchRequest,
-        responseObserver: StreamObserver<StartMatchReply>,
-    ) {
+    fun startMatch(request: StartMatchRequest): StartMatchReply {
         val teams = request.teamsList
         if (teams.all { it.playerIdsList.isEmpty() }) {
-            reply(responseObserver, accepted = false, reason = "empty roster")
-            return
+            return reply(accepted = false, reason = "empty roster")
         }
 
         val roster =
             try {
                 teams.map { team -> team.playerIdsList.map(UUID::fromString) }
             } catch (e: IllegalArgumentException) {
-                reply(responseObserver, accepted = false, reason = "malformed player id")
-                return
+                return reply(accepted = false, reason = "malformed player id")
             }
 
         val match = PushedMatch(request.matchId, request.modeId, roster, request.mapAddress)
-        if (registry.accept(match, handler)) {
-            reply(responseObserver, accepted = true, reason = "")
+        val accepted =
+            try {
+                registry.accept(match, handler)
+            } catch (t: Throwable) {
+                // Over gRPC an escaping throw still reached the matchmaker as an error status. Over
+                // NATS it reaches nobody at all: the dispatcher swallows it, no reply is published,
+                // and the players sit in a match that was never refused and never started. Anything
+                // we could not take is a refusal.
+                logger.error("Match host failed on match {}", match.matchId, t)
+                false
+            }
+        return if (accepted) {
+            reply(accepted = true, reason = "")
         } else {
             logger.warn("Match host refused match {}", match.matchId)
-            reply(responseObserver, accepted = false, reason = "match host refused the match")
+            reply(accepted = false, reason = "match host refused the match")
         }
     }
 
-    private fun reply(
-        observer: StreamObserver<StartMatchReply>,
-        accepted: Boolean,
-        reason: String,
-    ) {
-        observer.onNext(
-            StartMatchReply.newBuilder().setAccepted(accepted).setReason(reason).build()
-        )
-        observer.onCompleted()
-    }
+    private fun reply(accepted: Boolean, reason: String): StartMatchReply =
+        StartMatchReply.newBuilder().setAccepted(accepted).setReason(reason).build()
 }

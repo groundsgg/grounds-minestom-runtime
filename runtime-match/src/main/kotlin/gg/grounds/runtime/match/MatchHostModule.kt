@@ -1,18 +1,29 @@
 package gg.grounds.runtime.match
 
+import com.google.protobuf.InvalidProtocolBufferException
+import gg.grounds.grpc.match.StartMatchReply
+import gg.grounds.grpc.match.StartMatchRequest
 import gg.grounds.runtime.GroundsModule
 import gg.grounds.runtime.GroundsServerContext
-import io.grpc.Server
-import io.grpc.ServerBuilder
+import io.nats.client.Connection
+import io.nats.client.Dispatcher
+import io.nats.client.Message
+import io.nats.client.Nats
+import io.nats.client.Options
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import org.slf4j.LoggerFactory
 
 /**
- * Runs the MatchHost gRPC server that lets the matchmaker push matches onto this runtime.
- * Plaintext: this is a pod-to-pod call inside the project's own vCluster, and the vCluster boundary
- * is already the tenancy boundary — there is no foreign network hop here to secure with TLS.
+ * Answers the matchmaker's StartMatch over NATS request-reply, on the one subject that names this
+ * server: `match.host.<gameServerName>.start`.
+ *
+ * Request-reply rather than an event, because the matchmaker cannot act on the push until it knows
+ * the answer: an accepted match means it routes the players here, a refused one means they go back
+ * on the queue. A published event would tell it neither.
  *
  * Deliberately ships with no `META-INF/services` SPI provider. `GroundsModuleProvider.create()` is
  * no-arg, but this module needs the game's own [MatchHandler] to build arenas with, so it cannot be
@@ -21,14 +32,20 @@ import org.slf4j.LoggerFactory
  */
 class MatchHostModule(
     private val handler: MatchHandler,
-    private val port: Int = System.getenv("GROUNDS_MATCH_HOST_PORT")?.toIntOrNull() ?: 9090,
+    // Agones names the pod after the GameServer it created, so `HOSTNAME` inside that pod is
+    // literally the GameServer name the matchmaker allocated and is now addressing. The explicit
+    // override exists for runs that are not a GameServer pod at all.
+    private val serverName: String? =
+        System.getenv("GROUNDS_MATCH_HOST_NAME") ?: System.getenv("HOSTNAME"),
+    private val natsUrl: String = System.getenv("NATS_URL") ?: DEFAULT_NATS_URL,
 ) : GroundsModule {
     override val id: String = "grounds.match-host"
 
     private val logger = LoggerFactory.getLogger(MatchHostModule::class.java)
     private lateinit var service: MatchHostService
     private lateinit var counters: AgonesCounters
-    private var server: Server? = null
+    private var connection: Connection? = null
+    private var dispatcher: Dispatcher? = null
     private var drift: ScheduledExecutorService? = null
     private var suspected = 0
 
@@ -43,8 +60,7 @@ class MatchHostModule(
     }
 
     override fun start() {
-        server = ServerBuilder.forPort(port).addService(service).build().start()
-        logger.info("MatchHost gRPC server listening on port {}", port)
+        subscribe()
 
         drift =
             Executors.newSingleThreadScheduledExecutor { r ->
@@ -56,6 +72,71 @@ class MatchHostModule(
             DRIFT_INTERVAL_SECONDS,
             TimeUnit.SECONDS,
         )
+    }
+
+    /**
+     * A server that cannot work out its own name must not subscribe at all. The subject carries the
+     * addressing, so guessing one wrong would silently answer another server's StartMatch and take
+     * matches meant for it.
+     */
+    private fun subscribe() {
+        if (serverName.isNullOrBlank()) {
+            logger.error(
+                "Neither GROUNDS_MATCH_HOST_NAME nor HOSTNAME is set; not accepting matches"
+            )
+            return
+        }
+        val connection = connect() ?: return
+        val subject = "match.host.$serverName.start"
+        this.connection = connection
+        dispatcher =
+            connection
+                .createDispatcher { message -> respond(connection, message) }
+                .subscribe(subject)
+        logger.info("MatchHost listening on {}", subject)
+    }
+
+    /**
+     * A broker that is down leaves this server running without a responder rather than refusing to
+     * boot: the matchmaker still falls back to gRPC for one release, and a gamemode that will not
+     * start is worse than one that cannot be given matches.
+     */
+    private fun connect(): Connection? =
+        try {
+            val builder = Options.Builder().server(natsUrl).connectionName("$id/$serverName")
+            // The projected SA token as the NATS bearer, re-read per (re)connect so kubelet
+            // rotation is picked up. Absent file means no token, which is right for local runs.
+            val tokenPath = Path.of(System.getenv("GROUNDS_TOKEN_FILE") ?: DEFAULT_TOKEN_FILE)
+            if (Files.exists(tokenPath)) {
+                builder.tokenSupplier { Files.readString(tokenPath).trim().toCharArray() }
+            }
+            Nats.connect(builder.build())
+        } catch (e: Exception) {
+            logger.error("Failed to connect to NATS at {}; not accepting matches", natsUrl, e)
+            null
+        }
+
+    private fun respond(connection: Connection, message: Message) {
+        val replyTo = message.replyTo
+        if (replyTo == null) {
+            logger.warn("Dropping a StartMatch with no reply subject; there is nobody to answer")
+            return
+        }
+        val reply =
+            try {
+                service.startMatch(StartMatchRequest.parseFrom(message.data))
+            } catch (e: InvalidProtocolBufferException) {
+                // Refuse out loud rather than let the parse throw out of the dispatcher.
+                // A throw here publishes nothing, so the matchmaker waits out its whole
+                // deadline and then reads a contract mismatch as a server that went quiet
+                // — the one failure it has no way to tell apart from a lost message.
+                logger.error("Unparseable StartMatch on {}", message.subject, e)
+                StartMatchReply.newBuilder()
+                    .setAccepted(false)
+                    .setReason("malformed request")
+                    .build()
+            }
+        connection.publish(replyTo, reply.toByteArray())
     }
 
     /**
@@ -105,11 +186,15 @@ class MatchHostModule(
     override fun stop() {
         drift?.shutdownNow()
         drift = null
-        server?.shutdown()
-        server = null
+        dispatcher?.let { connection?.closeDispatcher(it) }
+        dispatcher = null
+        connection?.close()
+        connection = null
     }
 
     private companion object {
+        const val DEFAULT_NATS_URL = "nats://nats.nats.svc.cluster.local:4222"
+        const val DEFAULT_TOKEN_FILE = "/var/run/secrets/grounds/token"
         const val DRIFT_INTERVAL_SECONDS = 60L
         /** Two agreeing readings, so a match in flight is never mistaken for a leak. */
         const val DRIFT_CONFIRMATIONS = 2
