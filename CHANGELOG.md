@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.6.1...v0.7.0) (2026-08-04)
+
+
+### Features
+
+* **runtime-match:** wait for matches on NATS instead of a gRPC port ([#27](https://github.com/groundsgg/grounds-minestom-runtime/issues/27)) ([107769e](https://github.com/groundsgg/grounds-minestom-runtime/commit/107769e5d78c118659c1ad68bda06221f90db25a))
+
 ## [0.6.1](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.6.0...v0.6.1) (2026-08-03)
 
 
