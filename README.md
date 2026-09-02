@@ -21,6 +21,29 @@ runtime-testkit   Helpers for module composition tests
 examples          Minimal runnable server examples
 ```
 
+## Map block rendering
+
+`MapBlockRenderingModule` in `runtime-core` preserves player-head profiles, sign text
+and banner patterns when loading authored Anvil maps. Select it before modules that
+load worlds:
+
+```kotlin
+GroundsServer.builder()
+    .config(config)
+    .use(MapBlockRenderingModule())
+    .use(MyWorldModule())
+    .build()
+```
+
+The module registers client-NBT handlers for `minecraft:skull`, `minecraft:sign`,
+`minecraft:hanging_sign` and `minecraft:banner`. It enables no block interactions,
+inventories, physics or scheduled tasks and requires no Vanilla dependency. Existing
+handlers keep ownership; installation is idempotent for each Minestom process.
+Handlers persist until the process stops because loaded blocks keep their handler.
+Install before loading any chunks: later registration cannot repair existing dummy
+handlers. Embedded texture properties are forwarded as authored; the module does
+not look up missing profiles or convert old map formats.
+
 ## Build
 
 ```bash
