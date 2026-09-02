@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.7.0...v0.8.0) (2026-09-02)
+
+
+### Features
+
+* add opt-in map block rendering module ([#30](https://github.com/groundsgg/grounds-minestom-runtime/issues/30)) ([384d1e1](https://github.com/groundsgg/grounds-minestom-runtime/commit/384d1e13a1d9699641b52b888a7fe01ebb1a2304))
+
 ## [0.7.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.6.1...v0.7.0) (2026-08-04)
 
 
