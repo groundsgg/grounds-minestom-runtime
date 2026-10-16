@@ -117,6 +117,15 @@ class RuntimeMetricsTest {
     }
 
     @Test
+    fun `serves meters a module registers on the shared registry`() {
+        start().use { metrics ->
+            metrics.registry.counter("grounds.module.test").increment()
+
+            assertHas(scrape(metrics).body(), "grounds_module_test_total")
+        }
+    }
+
+    @Test
     fun `serves the configured path only`() {
         start(path = "/q/metrics").use { metrics ->
             assertEquals(200, scrape(metrics, "/q/metrics").statusCode())

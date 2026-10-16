@@ -115,6 +115,62 @@ must carry `prometheus.io/scrape=true` — `grounds-gamemode`'s `metrics.enabled
 does both. Failing to bind is logged and the server keeps running: a game server
 without metrics is degraded, one that refuses to boot is an outage.
 
+The registry is registered as the `io.micrometer.core.instrument.MeterRegistry`
+service, so a module can publish its own meters on the same endpoint:
+`ctx.services.get<MeterRegistry>()` (absent when the endpoint is off).
+
+## Match timeline
+
+`runtime-match` records where the seconds between a pushed match and a running
+round go. The runtime marks the push and the accept (`MatchHandler.start`
+returned or threw) itself; the gamemode reports the rest through
+`matchHost.timeline`:
+
+```kotlin
+val matchHost = MatchHostModule(handler)
+
+// In MatchHandler.start, once the map is ready (survivalgames: after MapSource.load).
+matchHost.timeline.mapLoaded(match.matchId, MatchTimeline.MapSource.DOWNLOAD) // or CACHE
+
+// On a player's first spawn in the match's world, not on connect.
+matchHost.timeline.playerJoined(matchId, player.uuid)
+
+// When the countdown is over and the round is being played.
+matchHost.timeline.started(matchId)
+```
+
+`finished` is called by `MatchRegistry.finish`. Calls are thread-safe and
+idempotent, and an unknown match id is ignored. A match nothing finishes is
+forgotten two hours after its push.
+
+Histograms (seconds, buckets `0.1 … 300`), labelled by `mode` only:
+
+```text
+grounds_match_time_to_accept_seconds      push → handler returned   (+ result=ok|failed)
+grounds_match_time_to_map_seconds         push → mapLoaded          (+ source=cache|download)
+grounds_match_time_to_first_join_seconds  push → first roster player joined
+grounds_match_time_to_all_joined_seconds  push → last roster player joined
+grounds_match_time_to_start_seconds       push → started
+grounds_match_queue_to_join_seconds       a player's queue entry → that player joined
+```
+
+`queue_to_join` needs the `grounds-enqueued-at` NATS header from service-match;
+without it (and without `traceparent` / `grounds-formed-at`) those parts are
+skipped. Every mark logs
+`Match timeline (match=<id>, mode=<mode>, stage=<stage>, at=+<ms>ms)`, and
+`started` adds a `Match timeline summary (...)` line with every stage's offset.
+
+Traces continue the pushed `traceparent`: a `match <mode>` span from push to
+finish, with `accept`, `map` and `wait for players` children and `player joined` /
+`started` events. Exported over OTLP/HTTP, configured by the standard variables:
+
+| Variable | Meaning |
+| --- | --- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Collector base URL (spans go to `/v1/traces`). Unset: tracing is a no-op |
+| `OTEL_SERVICE_NAME` | `service.name` |
+| `OTEL_RESOURCE_ATTRIBUTES` | Extra resource attributes, `key=value,...` |
+| `OTEL_SDK_DISABLED` | `true` turns tracing off |
+
 ## License
 
 Licensed under the Apache License, Version 2.0.
