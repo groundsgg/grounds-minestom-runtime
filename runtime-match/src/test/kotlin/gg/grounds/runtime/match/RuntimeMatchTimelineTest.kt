@@ -92,8 +92,12 @@ class RuntimeMatchTimelineTest {
         timeline.playerJoined("m1", bob)
         timeline.started("m1")
 
+        // Timers only: SimpleMeterRegistry adds its own `.histogram` gauges for the buckets, which
+        // Prometheus exposes as the timer's `le` instead.
         val keys =
-            meters.meters.associate { it.id.name to it.id.tags.map { tag -> tag.key }.toSet() }
+            meters.meters.filterIsInstance<Timer>().associate {
+                it.id.name to it.id.tags.map { tag -> tag.key }.toSet()
+            }
         assertEquals(
             mapOf(
                 RuntimeMatchTimeline.ACCEPT to setOf("mode", "result"),
