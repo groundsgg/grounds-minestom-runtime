@@ -5,7 +5,10 @@ dependencies {
 
     api(project(":runtime-api"))
     implementation("gg.grounds:library-jvm-modules-module-core:0.1.0")
-    implementation("net.minestom:minestom")
+    // `GroundsWorld` sends each map's seed with `Instance.setHashedSeed`, which the 1.21.11 build
+    // from the conventions does not have. 26.2 is the newest upstream release; the games and the
+    // lobby run on our 26.3 fork of it, which has the same instance API.
+    implementation("net.minestom:minestom:2026.10.07-26.2")
     implementation("org.slf4j:slf4j-api")
 
     // The metrics endpoint. Micrometer rather than a hand-written exposition format, because its
