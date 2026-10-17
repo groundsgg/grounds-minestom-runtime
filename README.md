@@ -44,6 +44,45 @@ Install before loading any chunks: later registration cannot repair existing dum
 handlers. Embedded texture properties are forwarded as authored; the module does
 not look up missing profiles or convert old map formats.
 
+## Opening worlds
+
+Open every map through `GroundsWorld` in `runtime-core` instead of
+`InstanceManager.createInstanceContainer`:
+
+```kotlin
+// An Anvil map: the directory that contains region/.
+val instance = GroundsWorld.open(worldPath, WorldIdentity.of("survivalgames/breeze", version))
+
+// An arena the game builds itself, with nothing on disk.
+val arena = GroundsWorld.create(WorldIdentity.of("getdown/deathmatch"))
+```
+
+Both register the instance and use `LightingChunk`. They fix two things a plain
+`createInstanceContainer` gets wrong:
+
+- **Identity.** Minestom sends every instance as `minecraft:overworld` with hashed
+  seed `0`, so behind one proxy address every map looks like the same world. LOD
+  mods cache per world under exactly those values (Distant Horizons:
+  `<seed>@<dimension key>` in a folder per server; Voxy: a hash of seed and key in
+  a folder per server address), and then show the previous map or the lobby in the
+  distance. `WorldIdentity.of(address, version)` gives each map its own key,
+  `grounds:<address>[_v<version>]` with everything but `a-z0-9_-` turned into `_`,
+  and a hashed seed derived from that key. The same map always gets the same
+  identity, so the LOD cache is reused; a new version gets a fresh one.
+- **Light.** Converted maps carry no sky or block light, and Minestom only lights
+  chunks it generates. `open` relights every chunk as it loads, the same way a
+  generated chunk is lit, so the map is not dark.
+
+Moving a player between worlds with different keys sends a Respawn, so the client
+starts a fresh level (and a fresh LOD level). Minestom resends inventory, health
+and abilities after it but not potion effects, so a game that moves players with
+active effects between maps (a deathmatch arena, say) should send them again.
+Between worlds with the same key nothing changes.
+
+The key shows on the F3 screen and in commands such as `/spawnpoint`. The
+dimension type, not the key, drives sky, fog and lighting, so an overworld-typed
+world looks like the overworld.
+
 ## Build
 
 ```bash
