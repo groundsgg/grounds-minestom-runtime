@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.9.1...v0.10.0) (2026-10-17)
+
+
+### Features
+
+* **match:** add MatchExit.toLobby to end a match without a kick message ([#37](https://github.com/groundsgg/grounds-minestom-runtime/issues/37)) ([7464cda](https://github.com/groundsgg/grounds-minestom-runtime/commit/7464cda4a02b8a1643429b535b83a5fe43eebc6a))
+
 ## [0.9.1](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.9.0...v0.9.1) (2026-10-17)
 
 
