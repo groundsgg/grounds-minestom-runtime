@@ -11,13 +11,9 @@ class IdleReadinessTest {
     private var now = 0L
     private var counter: Int? = 0
     private val state = FakeState()
-    private lateinit var registry: MatchRegistry
-    private val readiness =
+    private val readiness: IdleReadiness =
         IdleReadiness({ registry.idle() }, { counter }, state, GRACE, clock = { now })
-
-    init {
-        registry = MatchRegistry(NoCounters, null) { readiness.busy() }
-    }
+    private val registry: MatchRegistry = MatchRegistry(NoCounters, null) { readiness.busy() }
 
     @Test
     fun `an idle server is readied once the grace period is over`() {
