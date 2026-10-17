@@ -6,6 +6,7 @@ import gg.grounds.grpc.match.StartMatchRequest
 import gg.grounds.modules.get
 import gg.grounds.runtime.GroundsModule
 import gg.grounds.runtime.GroundsServerContext
+import gg.grounds.runtime.playerPrefetches
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.composite.CompositeMeterRegistry
 import io.nats.client.Connection
@@ -82,7 +83,8 @@ class MatchHostModule(
             }
         this.readiness = readiness
         matches = MatchRegistry(counters, recorder) { readiness?.busy() }
-        service = MatchHostService(matches, handler, recorder)
+        // Looked up per push, so a module installed after this one still gets the roster.
+        service = MatchHostService(matches, handler, recorder) { ctx.services.playerPrefetches() }
     }
 
     override fun start() {

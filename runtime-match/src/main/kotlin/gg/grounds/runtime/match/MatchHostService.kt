@@ -2,6 +2,7 @@ package gg.grounds.runtime.match
 
 import gg.grounds.grpc.match.StartMatchReply
 import gg.grounds.grpc.match.StartMatchRequest
+import gg.grounds.runtime.PlayerPrefetch
 import java.util.UUID
 import org.slf4j.LoggerFactory
 
@@ -23,6 +24,7 @@ internal constructor(
     private val registry: MatchRegistry,
     private val handler: MatchHandler,
     private val timeline: RuntimeMatchTimeline?,
+    private val prefetches: () -> List<PlayerPrefetch> = { emptyList() },
 ) {
     constructor(registry: MatchRegistry, handler: MatchHandler) : this(registry, handler, null)
 
@@ -47,6 +49,7 @@ internal constructor(
         val match = PushedMatch(request.matchId, request.modeId, roster, request.mapAddress)
         // Before the handler runs: a game loads its map inside start(), and marks it then.
         val fresh = timeline?.pushed(match, headers) ?: false
+        prefetch(match)
         val accepted =
             try {
                 registry.accept(match, handler)
@@ -64,6 +67,21 @@ internal constructor(
         } else {
             logger.warn("Match host refused match {}", match.matchId)
             reply(accepted = false, reason = "match host refused the match")
+        }
+    }
+
+    /**
+     * Before the handler: the matchmaker routes the players here as soon as this answers, and a
+     * game's start() can take seconds. A prefetch that throws costs nothing but the log line.
+     */
+    private fun prefetch(match: PushedMatch) {
+        val players = match.teams.flatten()
+        for (prefetch in prefetches()) {
+            try {
+                prefetch.prefetch(players, "match ${match.matchId}")
+            } catch (e: Exception) {
+                logger.warn("Player prefetch failed for match {}", match.matchId, e)
+            }
         }
     }
 
