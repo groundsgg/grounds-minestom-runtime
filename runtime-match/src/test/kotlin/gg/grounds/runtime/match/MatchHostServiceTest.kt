@@ -2,6 +2,12 @@ package gg.grounds.runtime.match
 
 import gg.grounds.grpc.match.MatchTeam
 import gg.grounds.grpc.match.StartMatchRequest
+import gg.grounds.modules.ServiceKey
+import gg.grounds.modules.ServiceRegistry
+import gg.grounds.modules.serviceKey
+import gg.grounds.runtime.PlayerPrefetch
+import gg.grounds.runtime.playerPrefetches
+import gg.grounds.runtime.registerPlayerPrefetch
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.opentelemetry.api.OpenTelemetry
 import java.util.UUID
@@ -111,6 +117,64 @@ class MatchHostServiceTest {
         assertEquals(0, timeline.tracked())
     }
 
+    @Test
+    fun `hands the roster to every prefetch before the handler runs`() {
+        val players = listOf(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID())
+        val events = mutableListOf<String>()
+        val prefetched = mutableListOf<Collection<UUID>>()
+        val prefetch = PlayerPrefetch { roster, reason ->
+            prefetched += roster
+            events += "prefetch $reason"
+        }
+        val service =
+            MatchHostService(MatchRegistry(NoopCounters), { events += "start" }, null) {
+                listOf(prefetch, prefetch)
+            }
+
+        val reply = service.startMatch(roster("m1", listOf(players.take(2), players.drop(2))))
+
+        assertTrue(reply.accepted)
+        assertEquals(listOf("prefetch match m1", "prefetch match m1", "start"), events)
+        assertEquals(listOf(players, players), prefetched)
+    }
+
+    @Test
+    fun `a prefetch that throws does not cost the match`() {
+        var started = false
+        val service =
+            MatchHostService(MatchRegistry(NoopCounters), { started = true }, null) {
+                listOf(PlayerPrefetch { _, _ -> error("service down") })
+            }
+
+        val reply = service.startMatch(rosterOfOne())
+
+        assertTrue(reply.accepted)
+        assertTrue(started)
+    }
+
+    @Test
+    fun `finds every prefetch a module registered`() {
+        val services = MapServiceRegistry()
+        val first = PlayerPrefetch { _, _ -> }
+        val second = PlayerPrefetch { _, _ -> }
+        services.register(serviceKey<String>(), "unrelated")
+        services.registerPlayerPrefetch("first", first)
+        services.registerPlayerPrefetch("second", second)
+
+        assertEquals(setOf(first, second), services.playerPrefetches().toSet())
+    }
+
+    private fun roster(matchId: String, teams: List<List<UUID>>): StartMatchRequest =
+        StartMatchRequest.newBuilder()
+            .setMatchId(matchId)
+            .setModeId("duel")
+            .addAllTeams(
+                teams.map { team ->
+                    MatchTeam.newBuilder().addAllPlayerIds(team.map(UUID::toString)).build()
+                }
+            )
+            .build()
+
     private fun rosterOfOne(): StartMatchRequest =
         StartMatchRequest.newBuilder()
             .setMatchId("m1")
@@ -120,6 +184,21 @@ class MatchHostServiceTest {
 
     private fun service(handler: MatchHandler): MatchHostService =
         MatchHostService(MatchRegistry(NoopCounters), handler)
+
+    private class MapServiceRegistry : ServiceRegistry {
+        private val services = linkedMapOf<ServiceKey<*>, Any>()
+
+        override fun <T : Any> register(key: ServiceKey<T>, service: T) {
+            services[key] = service
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        override fun <T : Any> get(key: ServiceKey<T>): T? = services[key] as T?
+
+        override fun keys(): Set<ServiceKey<*>> = services.keys.toSet()
+
+        override fun getUntyped(key: ServiceKey<*>): Any? = services[key]
+    }
 
     private object NoopCounters : MatchCounters {
         override fun decrement() {}
