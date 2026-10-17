@@ -9,6 +9,7 @@ WORKDIR /workspace
 COPY . .
 
 RUN --mount=type=secret,id=github_token \
+    --mount=type=secret,id=gradle_init,target=/root/.gradle/init.d/grounds-maven-mirror.init.gradle.kts,required=false \
     mkdir -p ~/.gradle && \
     printf "github.user=%s\ngithub.token=%s\n" "$GITHUB_USER" "$(cat /run/secrets/github_token)" > ~/.gradle/gradle.properties && \
     ./gradlew :examples:minigame-agones:installDist --no-daemon
