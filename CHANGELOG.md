@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.11.0...v0.12.0) (2026-10-17)
+
+
+### Features
+
+* **match:** hand each pushed roster to registered player prefetches ([#42](https://github.com/groundsgg/grounds-minestom-runtime/issues/42)) ([d850c0f](https://github.com/groundsgg/grounds-minestom-runtime/commit/d850c0f64d4833da7393169d3923844c62b5e5c0))
+
 ## [0.11.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.10.0...v0.11.0) (2026-10-17)
 
 
