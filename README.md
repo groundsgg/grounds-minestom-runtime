@@ -171,6 +171,21 @@ finish, with `accept`, `map` and `wait for players` children and `player joined`
 | `OTEL_RESOURCE_ATTRIBUTES` | Extra resource attributes, `key=value,...` |
 | `OTEL_SDK_DISABLED` | `true` turns tracing off |
 
+## Idle servers go back to Ready
+
+The matchmaker's allocation moves a server to `Allocated`. `runtime-match`
+moves it back to `Ready` through the Agones SDK once it has hosted nothing for
+a grace period: no live match, none being accepted, and the `matches` counter at
+0. Agones can then replace it in a Fleet rolling update and scale it down. The
+matchmaker still allocates it, since its allocation also takes `Ready` servers
+with a free slot. A match pushed to a server that is `Ready` marks it
+`Allocated` again before the gamemode's `MatchHandler` runs.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `GROUNDS_MATCHMAKING_REREADY` | `true` | `false` keeps a server `Allocated` after its first match |
+| `GROUNDS_MATCHMAKING_REREADY_GRACE_SECONDS` | `20` | How long a server must be idle before it is readied |
+
 ## License
 
 Licensed under the Apache License, Version 2.0.
