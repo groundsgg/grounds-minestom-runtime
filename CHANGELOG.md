@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.10.0...v0.11.0) (2026-10-17)
+
+
+### Features
+
+* **world:** open maps with their own world identity and relit chunks ([#41](https://github.com/groundsgg/grounds-minestom-runtime/issues/41)) ([c6fa889](https://github.com/groundsgg/grounds-minestom-runtime/commit/c6fa889d5be770d80f8e824584f809126e81787c))
+
+
+### Bug Fixes
+
+* **build:** resolve dependencies through the runner mirror in Docker builds ([#39](https://github.com/groundsgg/grounds-minestom-runtime/issues/39)) ([5a1a7a3](https://github.com/groundsgg/grounds-minestom-runtime/commit/5a1a7a34a04936dd643953a1c509fefc43af1e61))
+
 ## [0.10.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.9.1...v0.10.0) (2026-10-17)
 
 
