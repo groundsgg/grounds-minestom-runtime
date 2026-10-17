@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.9.0...v0.9.1) (2026-10-17)
+
+
+### Bug Fixes
+
+* mark idle matchmade servers Ready again ([#35](https://github.com/groundsgg/grounds-minestom-runtime/issues/35)) ([13270f9](https://github.com/groundsgg/grounds-minestom-runtime/commit/13270f9d78476dc61980794c8a3bbb7bdf45b3c7))
+
 ## [0.9.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.8.0...v0.9.0) (2026-10-17)
 
 
