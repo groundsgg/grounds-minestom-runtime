@@ -51,6 +51,7 @@ class MatchHostModule(
     private var dispatcher: Dispatcher? = null
     private var drift: ScheduledExecutorService? = null
     private var suspected = 0
+    private var readiness: IdleReadiness? = null
     private var tracing: MatchTracing? = null
     private lateinit var recorder: RuntimeMatchTimeline
 
@@ -70,7 +71,17 @@ class MatchHostModule(
         recorder = RuntimeMatchTimeline(meters, tracer)
         timeline = recorder
         counters = AgonesCounters()
-        matches = MatchRegistry(counters, recorder)
+        val readiness =
+            IdleReadiness.graceFromEnv()?.let { grace ->
+                IdleReadiness(
+                    { matches.idle() },
+                    counters::advertised,
+                    AgonesGameServerState(),
+                    grace,
+                )
+            }
+        this.readiness = readiness
+        matches = MatchRegistry(counters, recorder) { readiness?.busy() }
         service = MatchHostService(matches, handler, recorder)
     }
 
@@ -93,6 +104,22 @@ class MatchHostModule(
             DRIFT_INTERVAL_SECONDS,
             TimeUnit.SECONDS,
         )
+        readiness?.let { readiness ->
+            drift?.scheduleAtFixedRate(
+                { idleCheck(readiness) },
+                READINESS_INTERVAL_SECONDS,
+                READINESS_INTERVAL_SECONDS,
+                TimeUnit.SECONDS,
+            )
+        }
+    }
+
+    private fun idleCheck(readiness: IdleReadiness) {
+        try {
+            readiness.tick()
+        } catch (e: Exception) {
+            logger.warn("Idle readiness check failed", e)
+        }
     }
 
     /** Forgets the timelines of matches nothing ever finished, so they cannot pile up. */
@@ -243,5 +270,6 @@ class MatchHostModule(
         const val DRIFT_INTERVAL_SECONDS = 60L
         /** Two agreeing readings, so a match in flight is never mistaken for a leak. */
         const val DRIFT_CONFIRMATIONS = 2
+        const val READINESS_INTERVAL_SECONDS = 5L
     }
 }

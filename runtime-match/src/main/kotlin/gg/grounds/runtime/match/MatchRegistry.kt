@@ -1,6 +1,7 @@
 package gg.grounds.runtime.match
 
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 import org.slf4j.LoggerFactory
 
 /**
@@ -12,11 +13,19 @@ import org.slf4j.LoggerFactory
  * free the same slot twice.
  */
 class MatchRegistry
-internal constructor(private val counters: MatchCounters, private val timeline: MatchTimeline?) {
+internal constructor(
+    private val counters: MatchCounters,
+    private val timeline: MatchTimeline?,
+    /** Runs before a pushed match is handed to its handler; see [IdleReadiness.busy]. */
+    private val onAccepting: () -> Unit = {},
+) {
     constructor(counters: MatchCounters) : this(counters, null)
 
     private val logger = LoggerFactory.getLogger(MatchRegistry::class.java)
     private val live = ConcurrentHashMap<String, PushedMatch>()
+
+    /** Pushes inside [accept] whose handler has not returned yet, so not in [live] either. */
+    private val accepting = AtomicInteger()
 
     /**
      * Hands [match] to [handler]. Returns true once the match is hosted, whether this call actually
@@ -35,7 +44,9 @@ internal constructor(private val counters: MatchCounters, private val timeline: 
      * took stage down in both regions for hours.
      */
     fun accept(match: PushedMatch, handler: MatchHandler): Boolean {
+        accepting.incrementAndGet()
         return try {
+            onAccepting()
             // computeIfAbsent runs the mapping function at most once per key even
             // under concurrent calls, which is exactly the "handler runs once"
             // guarantee accept() needs. Its value type can't hold a "refused"
@@ -60,6 +71,8 @@ internal constructor(private val counters: MatchCounters, private val timeline: 
             logger.error("Match handler refused match {}", match.matchId, e.cause)
             counters.decrement()
             false
+        } finally {
+            accepting.decrementAndGet()
         }
     }
 
@@ -80,4 +93,7 @@ internal constructor(private val counters: MatchCounters, private val timeline: 
     }
 
     fun live(): Int = live.size
+
+    /** No match is live and none is being accepted right now. */
+    fun idle(): Boolean = accepting.get() == 0 && live.isEmpty()
 }
