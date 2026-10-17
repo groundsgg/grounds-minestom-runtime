@@ -60,7 +60,11 @@ import org.slf4j.LoggerFactory
  */
 class RuntimeMetrics
 private constructor(
-    private val registry: PrometheusMeterRegistry,
+    /**
+     * The registry this endpoint serves. Also registered as the `MeterRegistry` service, so a
+     * module (runtime-match's timeline, a gamemode) publishes its own meters on the same endpoint.
+     */
+    val registry: MeterRegistry,
     private val http: HttpServer,
     private val closeables: List<AutoCloseable>,
 ) : AutoCloseable {

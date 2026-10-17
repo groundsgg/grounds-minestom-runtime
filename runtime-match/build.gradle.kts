@@ -46,6 +46,20 @@ dependencies {
     implementation("javax.annotation:javax.annotation-api:1.3.2")
     implementation("org.slf4j:slf4j-api")
 
+    // The match timeline's histograms go into the runtime's own registry (runtime-core registers
+    // it as a service), so this is the same Micrometer runtime-core pins.
+    implementation("io.micrometer:micrometer-core:1.16.6")
+    // Its trace, exported over OTLP/HTTP. grounds-dependencies does not manage OpenTelemetry. The
+    // JDK's HttpClient sends rather than the default OkHttp sender, which would bring OkHttp, Okio
+    // and their Kotlin into every gamemode's jar for one POST.
+    implementation("io.opentelemetry:opentelemetry-sdk:1.67.0")
+    implementation("io.opentelemetry:opentelemetry-exporter-otlp:1.67.0") {
+        exclude(group = "io.opentelemetry", module = "opentelemetry-exporter-sender-okhttp")
+    }
+    implementation("io.opentelemetry:opentelemetry-exporter-sender-jdk:1.67.0")
+
+    testImplementation("io.micrometer:micrometer-registry-prometheus:1.16.6")
+    testImplementation("io.opentelemetry:opentelemetry-sdk-testing:1.67.0")
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

@@ -18,10 +18,20 @@ import org.slf4j.LoggerFactory
  * Which is also why [startMatch] always returns a reply and never throws: a thrown exception leaves
  * the matchmaker unable to tell "refused" from "lost".
  */
-class MatchHostService(private val registry: MatchRegistry, private val handler: MatchHandler) {
+class MatchHostService
+internal constructor(
+    private val registry: MatchRegistry,
+    private val handler: MatchHandler,
+    private val timeline: RuntimeMatchTimeline?,
+) {
+    constructor(registry: MatchRegistry, handler: MatchHandler) : this(registry, handler, null)
+
     private val logger = LoggerFactory.getLogger(MatchHostService::class.java)
 
-    fun startMatch(request: StartMatchRequest): StartMatchReply {
+    fun startMatch(request: StartMatchRequest): StartMatchReply =
+        startMatch(request, PushHeaders.NONE)
+
+    internal fun startMatch(request: StartMatchRequest, headers: PushHeaders): StartMatchReply {
         val teams = request.teamsList
         if (teams.all { it.playerIdsList.isEmpty() }) {
             return reply(accepted = false, reason = "empty roster")
@@ -35,6 +45,8 @@ class MatchHostService(private val registry: MatchRegistry, private val handler:
             }
 
         val match = PushedMatch(request.matchId, request.modeId, roster, request.mapAddress)
+        // Before the handler runs: a game loads its map inside start(), and marks it then.
+        val fresh = timeline?.pushed(match, headers) ?: false
         val accepted =
             try {
                 registry.accept(match, handler)
@@ -46,6 +58,7 @@ class MatchHostService(private val registry: MatchRegistry, private val handler:
                 logger.error("Match host failed on match {}", match.matchId, t)
                 false
             }
+        if (fresh) timeline?.accepted(match.matchId, accepted)
         return if (accepted) {
             reply(accepted = true, reason = "")
         } else {

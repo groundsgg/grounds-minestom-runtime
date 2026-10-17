@@ -2,6 +2,7 @@ package gg.grounds.runtime.core
 
 import gg.grounds.modules.ServiceRegistry
 import gg.grounds.modules.core.ServiceLoaderModuleDiscovery
+import gg.grounds.modules.register
 import gg.grounds.runtime.ActiveGroundsModuleProvider
 import gg.grounds.runtime.GroundsModule
 import gg.grounds.runtime.GroundsModuleProvider
@@ -9,6 +10,7 @@ import gg.grounds.runtime.GroundsServerContext
 import gg.grounds.runtime.RuntimeEnvironment
 import gg.grounds.runtime.ServerType
 import gg.grounds.runtime.core.metrics.RuntimeMetrics
+import io.micrometer.core.instrument.MeterRegistry
 import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
 import net.minestom.server.event.Event
@@ -106,6 +108,7 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
                     )
                 }
                 .getOrNull()
+        metrics?.let { services.register<MeterRegistry>(it.registry) }
     }
 
     private class DefaultGroundsServerContext(

@@ -11,7 +11,10 @@ import org.slf4j.LoggerFactory
  * idempotent on `matchId` so a retry can never build the same arena twice, and finishing can never
  * free the same slot twice.
  */
-class MatchRegistry(private val counters: MatchCounters) {
+class MatchRegistry
+internal constructor(private val counters: MatchCounters, private val timeline: MatchTimeline?) {
+    constructor(counters: MatchCounters) : this(counters, null)
+
     private val logger = LoggerFactory.getLogger(MatchRegistry::class.java)
     private val live = ConcurrentHashMap<String, PushedMatch>()
 
@@ -66,8 +69,11 @@ class MatchRegistry(private val counters: MatchCounters) {
      * Removes [matchId] and decrements the Agones counter, but only if the match was actually live.
      * `finish` must itself be safe to call more than once (the gamemode may call it defensively) —
      * decrementing on a repeat call would advertise a slot this server doesn't actually have free.
+     *
+     * Also ends the match's [MatchTimeline], so a gamemode never calls [MatchTimeline.finished].
      */
     fun finish(matchId: String) {
+        timeline?.finished(matchId)
         if (live.remove(matchId) != null) {
             counters.decrement()
         }

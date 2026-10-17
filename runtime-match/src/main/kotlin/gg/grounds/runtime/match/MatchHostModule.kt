@@ -3,8 +3,11 @@ package gg.grounds.runtime.match
 import com.google.protobuf.InvalidProtocolBufferException
 import gg.grounds.grpc.match.StartMatchReply
 import gg.grounds.grpc.match.StartMatchRequest
+import gg.grounds.modules.get
 import gg.grounds.runtime.GroundsModule
 import gg.grounds.runtime.GroundsServerContext
+import io.micrometer.core.instrument.MeterRegistry
+import io.micrometer.core.instrument.composite.CompositeMeterRegistry
 import io.nats.client.Connection
 import io.nats.client.Dispatcher
 import io.nats.client.Message
@@ -48,15 +51,27 @@ class MatchHostModule(
     private var dispatcher: Dispatcher? = null
     private var drift: ScheduledExecutorService? = null
     private var suspected = 0
+    private var tracing: MatchTracing? = null
+    private lateinit var recorder: RuntimeMatchTimeline
 
     /** So the gamemode can call [MatchRegistry.finish] when a match ends. */
     lateinit var matches: MatchRegistry
         private set
 
+    /** Where the gamemode reports its own marks: map loaded, players joined, round started. */
+    lateinit var timeline: MatchTimeline
+        private set
+
     override fun install(ctx: GroundsServerContext) {
+        // The runtime's registry when its metrics endpoint is on; otherwise one that records into
+        // nothing, so the timeline still logs and traces.
+        val meters = ctx.services.get<MeterRegistry>() ?: CompositeMeterRegistry()
+        val tracer = MatchTracing.fromEnv().also { tracing = it }.tracer
+        recorder = RuntimeMatchTimeline(meters, tracer)
+        timeline = recorder
         counters = AgonesCounters()
-        matches = MatchRegistry(counters)
-        service = MatchHostService(matches, handler)
+        matches = MatchRegistry(counters, recorder)
+        service = MatchHostService(matches, handler, recorder)
     }
 
     override fun start() {
@@ -72,6 +87,21 @@ class MatchHostModule(
             DRIFT_INTERVAL_SECONDS,
             TimeUnit.SECONDS,
         )
+        drift?.scheduleAtFixedRate(
+            ::expireTimelines,
+            DRIFT_INTERVAL_SECONDS,
+            DRIFT_INTERVAL_SECONDS,
+            TimeUnit.SECONDS,
+        )
+    }
+
+    /** Forgets the timelines of matches nothing ever finished, so they cannot pile up. */
+    private fun expireTimelines() {
+        try {
+            recorder.expire()
+        } catch (e: Exception) {
+            logger.warn("Match timeline expiry failed", e)
+        }
     }
 
     /**
@@ -124,7 +154,7 @@ class MatchHostModule(
         }
         val reply =
             try {
-                service.startMatch(StartMatchRequest.parseFrom(message.data))
+                service.startMatch(StartMatchRequest.parseFrom(message.data), headers(message))
             } catch (e: InvalidProtocolBufferException) {
                 // Refuse out loud rather than let the parse throw out of the dispatcher.
                 // A throw here publishes nothing, so the matchmaker waits out its whole
@@ -137,6 +167,19 @@ class MatchHostModule(
                     .build()
             }
         connection.publish(replyTo, reply.toByteArray())
+    }
+
+    /**
+     * The timeline's NATS headers. A service-match that predates them sends none, which leaves the
+     * stages they feed unrecorded rather than refusing the match.
+     */
+    private fun headers(message: Message): PushHeaders {
+        val headers = message.headers ?: return PushHeaders.NONE
+        return PushHeaders.parse(
+            traceparent = headers.getFirst(PushHeaders.TRACEPARENT),
+            enqueuedAt = headers.getFirst(PushHeaders.ENQUEUED_AT),
+            formedAt = headers.getFirst(PushHeaders.FORMED_AT),
+        )
     }
 
     /**
@@ -190,6 +233,8 @@ class MatchHostModule(
         dispatcher = null
         connection?.close()
         connection = null
+        tracing?.close()
+        tracing = null
     }
 
     private companion object {
