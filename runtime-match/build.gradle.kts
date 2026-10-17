@@ -1,5 +1,6 @@
 // This module is transport-only — it receives StartMatch and hands the roster to
-// whatever gamemode wired it, and never touches Minestom itself. The wire is NATS
+// whatever gamemode wired it. Minestom (through runtime-api) is used only by
+// MatchExit, which sends a finished match's players back. The wire is NATS
 // now, but the payloads are still the protobuf messages from
 // library-grpc-contracts-match, so it builds on gg.grounds.grpc-conventions
 // rather than gg.grounds.minestom-conventions;

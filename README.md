@@ -186,6 +186,29 @@ with a free slot. A match pushed to a server that is `Ready` marks it
 | `GROUNDS_MATCHMAKING_REREADY` | `true` | `false` keeps a server `Allocated` after its first match |
 | `GROUNDS_MATCHMAKING_REREADY_GRACE_SECONDS` | `20` | How long a server must be idle before it is readied |
 
+## Ending a match
+
+When a match is over, send its players back to a lobby with `MatchExit.toLobby`
+instead of kicking them with a message:
+
+```kotlin
+// Once the podium delay is over, in place of `forEach { it.kick("Match over") }`.
+MatchExit.toLobby(instance.players)              // fallback kick after 5 s
+MatchExit.toLobby(players, Duration.ofSeconds(10))
+```
+
+For each player it sends the `Lobby` verb on the `grounds:match` plugin-message
+channel (one `DataOutputStream.writeUTF("Lobby")`, bytes `00 05 4C 6F 62 62 79`).
+plugin-match on the proxy moves that player to their home lobby, or the
+least-loaded `lobby-*` server, as a normal server switch: no kick and no chat line.
+
+After `kickAfter` (default 5 s) anyone still connected is kicked with an empty
+reason (`Component.empty()`). plugin-match redirects that kick to a lobby without
+a message as well, so the fallback also covers proxies that don't know the verb
+yet. The player collection is copied at the call, so passing a live set such as
+`instance.players` is fine. Keep using a reasoned kick for players who never
+belonged to a match (`"No match found"`).
+
 ## License
 
 Licensed under the Apache License, Version 2.0.
