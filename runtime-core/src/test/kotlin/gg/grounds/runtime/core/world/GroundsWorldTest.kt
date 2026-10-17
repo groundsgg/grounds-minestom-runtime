@@ -89,12 +89,13 @@ class GroundsWorldTest {
         loader.loadInstance(instance)
         loader.saveInstance(instance)
         loader.saveChunk(chunk)
+        loader.saveChunks(listOf(chunk))
         loader.unloadChunk(chunk)
 
         assertTrue(loader.supportsParallelLoading())
         assertTrue(loader.supportsParallelSaving())
         assertEquals(
-            listOf("loadInstance", "saveInstance", "saveChunk", "unloadChunk"),
+            listOf("loadInstance", "saveInstance", "saveChunk", "saveChunk", "unloadChunk"),
             delegate.calls,
         )
     }

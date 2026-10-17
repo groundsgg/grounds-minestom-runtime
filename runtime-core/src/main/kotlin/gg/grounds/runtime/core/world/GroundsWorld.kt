@@ -60,10 +60,26 @@ object GroundsWorld {
 /**
  * Treats every chunk [delegate] loads like a generated one for lighting: `onGenerate` invalidates
  * the light of a [LightingChunk] and its loaded neighbours, so it is computed before the chunk is
- * first sent. Everything else, such as `loadInstance`, `unloadChunk` and parallel loading, is
- * [delegate]'s own.
+ * first sent. Everything else is [delegate]'s own.
  */
-internal class RelightingLoader(private val delegate: ChunkLoader) : ChunkLoader by delegate {
+internal class RelightingLoader(private val delegate: ChunkLoader) : ChunkLoader {
     override fun loadChunk(instance: Instance, chunkX: Int, chunkZ: Int): Chunk? =
         delegate.loadChunk(instance, chunkX, chunkZ)?.also { it.onGenerate() }
+
+    // Spelled out: Kotlin's `by` delegation does not forward Java default methods, and AnvilLoader
+    // overrides most of them. Without these, its level data, region cache and parallel loading
+    // would be dropped silently.
+    override fun loadInstance(instance: Instance) = delegate.loadInstance(instance)
+
+    override fun saveInstance(instance: Instance) = delegate.saveInstance(instance)
+
+    override fun saveChunk(chunk: Chunk) = delegate.saveChunk(chunk)
+
+    override fun saveChunks(chunks: Collection<Chunk>) = delegate.saveChunks(chunks)
+
+    override fun unloadChunk(chunk: Chunk) = delegate.unloadChunk(chunk)
+
+    override fun supportsParallelLoading() = delegate.supportsParallelLoading()
+
+    override fun supportsParallelSaving() = delegate.supportsParallelSaving()
 }
