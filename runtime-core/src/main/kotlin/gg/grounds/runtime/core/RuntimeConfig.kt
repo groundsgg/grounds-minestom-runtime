@@ -9,6 +9,10 @@ data class RuntimeConfig(
     val host: String = "0.0.0.0",
     val port: Int = 25565,
     val serverBrand: String = "Grounds",
+    /**
+     * The game mode this server runs, e.g. `duel`; announced to clients, see [announceServerRole].
+     */
+    val modeId: String? = null,
     val onlineMode: Boolean = true,
     val proxy: ProxyConfig = ProxyConfig(),
     val metrics: MetricsConfig = MetricsConfig(),
@@ -25,6 +29,7 @@ data class RuntimeConfig(
                 host = env.string("GROUNDS_BIND_HOST", "0.0.0.0"),
                 port = minecraftPort,
                 serverBrand = env.string("GROUNDS_SERVER_BRAND", "Grounds"),
+                modeId = env.string("GROUNDS_MODE_ID", "").trim().takeIf { it.isNotEmpty() },
                 onlineMode = env.boolean("GROUNDS_ONLINE_MODE", true),
                 proxy = parseProxyConfig(env),
                 metrics = parseMetricsConfig(env, minecraftPort),
