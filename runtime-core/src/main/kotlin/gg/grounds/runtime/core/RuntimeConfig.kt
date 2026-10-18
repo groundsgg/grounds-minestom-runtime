@@ -9,7 +9,9 @@ data class RuntimeConfig(
     val host: String = "0.0.0.0",
     val port: Int = 25565,
     val serverBrand: String = "Grounds",
-    /** The game mode this server runs, e.g. `duel`; announced to clients, see [announceServerRole]. */
+    /**
+     * The game mode this server runs, e.g. `duel`; announced to clients, see [announceServerRole].
+     */
     val modeId: String? = null,
     val onlineMode: Boolean = true,
     val proxy: ProxyConfig = ProxyConfig(),

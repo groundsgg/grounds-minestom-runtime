@@ -171,10 +171,7 @@ class GroundsServerTest {
 
     @Test
     fun `server role payload names lobbies and games`() {
-        assertEquals(
-            "lobby",
-            serverRolePayload(testConfig().copy(serverType = ServerType.LOBBY)),
-        )
+        assertEquals("lobby", serverRolePayload(testConfig().copy(serverType = ServerType.LOBBY)))
         assertEquals("game", serverRolePayload(testConfig()))
         assertEquals("game:duel", serverRolePayload(testConfig().copy(modeId = "duel")))
     }

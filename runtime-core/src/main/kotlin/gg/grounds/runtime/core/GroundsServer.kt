@@ -231,10 +231,10 @@ internal fun applyRuntimeBrand(config: RuntimeConfig) {
 internal const val SERVER_ROLE_CHANNEL = "grounds:server"
 
 /**
- * Tell every joining client which kind of server it landed on: `lobby`, `game` or
- * `game:<modeId>`. Vanilla clients ignore channels they do not know. The load-test bots
- * (groundsgg/mc-stress) need it: through the proxy a move into a match and a redirect from one
- * lobby to another look the same, a server switch.
+ * Tell every joining client which kind of server it landed on: `lobby`, `game` or `game:<modeId>`.
+ * Vanilla clients ignore channels they do not know. The load-test bots (groundsgg/mc-stress) need
+ * it: through the proxy a move into a match and a redirect from one lobby to another look the same,
+ * a server switch.
  */
 internal fun announceServerRole(config: RuntimeConfig) {
     val payload = serverRolePayload(config)
