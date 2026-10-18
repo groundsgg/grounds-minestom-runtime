@@ -160,6 +160,26 @@ class GroundsServerTest {
     }
 
     @Test
+    fun `runtime config reads the mode id and treats blank as unset`() {
+        val withMode =
+            RuntimeConfig.fromEnvironment(RuntimeEnv.of(mapOf("GROUNDS_MODE_ID" to " duel ")))
+        val blank = RuntimeConfig.fromEnvironment(RuntimeEnv.of(mapOf("GROUNDS_MODE_ID" to " ")))
+
+        assertEquals("duel", withMode.modeId)
+        assertEquals(null, blank.modeId)
+    }
+
+    @Test
+    fun `server role payload names lobbies and games`() {
+        assertEquals(
+            "lobby",
+            serverRolePayload(testConfig().copy(serverType = ServerType.LOBBY)),
+        )
+        assertEquals("game", serverRolePayload(testConfig()))
+        assertEquals("game:duel", serverRolePayload(testConfig().copy(modeId = "duel")))
+    }
+
+    @Test
     fun `runtime config rejects invalid bind port`() {
         val error =
             assertThrows(IllegalArgumentException::class.java) {

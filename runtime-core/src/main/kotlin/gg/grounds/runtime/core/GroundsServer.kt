@@ -15,6 +15,7 @@ import net.minestom.server.Auth
 import net.minestom.server.MinecraftServer
 import net.minestom.server.event.Event
 import net.minestom.server.event.EventNode
+import net.minestom.server.event.player.PlayerSpawnEvent
 import org.slf4j.LoggerFactory
 
 class GroundsServer
@@ -46,6 +47,7 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
 
         val minecraftServer = MinecraftServer.init(createRuntimeAuth(config))
         applyRuntimeBrand(config)
+        announceServerRole(config)
         startMetrics()
         val context =
             DefaultGroundsServerContext(config, services, activeModuleProviders, shutdownHooks)
@@ -224,6 +226,30 @@ private constructor(private val config: RuntimeConfig, composition: GroundsModul
 internal fun applyRuntimeBrand(config: RuntimeConfig) {
     MinecraftServer.setBrandName(config.serverBrand)
 }
+
+/** Plugin channel on which a server tells each joining client what kind of server it is. */
+internal const val SERVER_ROLE_CHANNEL = "grounds:server"
+
+/**
+ * Tell every joining client which kind of server it landed on: `lobby`, `game` or
+ * `game:<modeId>`. Vanilla clients ignore channels they do not know. The load-test bots
+ * (groundsgg/mc-stress) need it: through the proxy a move into a match and a redirect from one
+ * lobby to another look the same, a server switch.
+ */
+internal fun announceServerRole(config: RuntimeConfig) {
+    val payload = serverRolePayload(config)
+    MinecraftServer.getGlobalEventHandler().addListener(PlayerSpawnEvent::class.java) { event ->
+        if (event.isFirstSpawn) {
+            event.player.sendPluginMessage(SERVER_ROLE_CHANNEL, payload)
+        }
+    }
+}
+
+internal fun serverRolePayload(config: RuntimeConfig): String =
+    when (config.serverType) {
+        ServerType.LOBBY -> "lobby"
+        ServerType.MINIGAME -> config.modeId?.let { "game:$it" } ?: "game"
+    }
 
 internal fun createRuntimeAuth(config: RuntimeConfig): Auth {
     return when (config.proxy.mode) {
