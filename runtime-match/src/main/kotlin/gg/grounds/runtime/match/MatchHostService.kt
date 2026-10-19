@@ -4,6 +4,9 @@ import gg.grounds.grpc.match.StartMatchReply
 import gg.grounds.grpc.match.StartMatchRequest
 import gg.grounds.runtime.PlayerPrefetch
 import java.util.UUID
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
+import java.util.concurrent.Executor
 import org.slf4j.LoggerFactory
 
 /**
@@ -25,6 +28,10 @@ internal constructor(
     private val handler: MatchHandler,
     private val timeline: RuntimeMatchTimeline?,
     private val prefetches: () -> List<PlayerPrefetch> = { emptyList() },
+    /** Where a [PreparedMatchHandler]'s rounds are reported ready; null: never wait for them. */
+    private val readySignal: MatchReadySignal? = null,
+    /** Runs the ready signal, which blocks on HTTP; never the dispatcher or the tick. */
+    private val signalling: Executor = Executor { task -> Thread.ofVirtual().start(task) },
 ) {
     constructor(registry: MatchRegistry, handler: MatchHandler) : this(registry, handler, null)
 
@@ -62,8 +69,16 @@ internal constructor(
                 false
             }
         if (fresh) timeline?.accepted(match.matchId, accepted)
+        // Only when the matchmaker asked to wait, the game prepares its rounds, and there is a way
+        // to tell the matchmaker: otherwise the players are sent at once, as before.
+        val signalsReady =
+            accepted &&
+                request.waitForReady &&
+                handler is PreparedMatchHandler &&
+                readySignal != null
+        if (signalsReady && fresh) watchPreparation(handler as PreparedMatchHandler, match)
         return if (accepted) {
-            reply(accepted = true, reason = "")
+            reply(accepted = true, reason = "", signalsReady = signalsReady)
         } else {
             logger.warn("Match host refused match {}", match.matchId)
             reply(accepted = false, reason = "match host refused the match")
@@ -85,6 +100,58 @@ internal constructor(
         }
     }
 
-    private fun reply(accepted: Boolean, reason: String): StartMatchReply =
-        StartMatchReply.newBuilder().setAccepted(accepted).setReason(reason).build()
+    /**
+     * Reports [match] ready once [handler] has prepared it. A round that failed to get ready, or
+     * that the matchmaker no longer routes (it gave up in the meantime), is cancelled here.
+     */
+    private fun watchPreparation(handler: PreparedMatchHandler, match: PushedMatch) {
+        @Suppress("UNCHECKED_CAST")
+        val stage: CompletionStage<Any?> =
+            try {
+                handler.prepared(match) as CompletionStage<Any?>
+            } catch (t: Throwable) {
+                CompletableFuture.failedFuture(t)
+            }
+        stage.whenCompleteAsync(
+            { _, error ->
+                val ok = error == null
+                timeline?.prepared(match.matchId, ok)
+                if (!ok) logger.error("Match {} could not be prepared", match.matchId, error)
+                val routed =
+                    readySignal?.send(
+                        match.matchId,
+                        ok,
+                        error?.let { it.message ?: it.javaClass.simpleName } ?: "",
+                    )
+                if (!ok) cancel(match.matchId, "preparation failed")
+                else if (routed == false) cancel(match.matchId, "the matchmaker gave it up")
+            },
+            signalling,
+        )
+    }
+
+    /**
+     * The matchmaker gave up on [matchId] before its players came, or its round could not be
+     * prepared: discard the round and free its slot.
+     */
+    fun cancel(matchId: String, reason: String) {
+        logger.warn("Match {} cancelled before its players came: {}", matchId, reason)
+        try {
+            (handler as? PreparedMatchHandler)?.cancel(matchId, reason)
+        } catch (e: Exception) {
+            logger.error("Match handler failed to cancel match {}", matchId, e)
+        }
+        registry.finish(matchId)
+    }
+
+    private fun reply(
+        accepted: Boolean,
+        reason: String,
+        signalsReady: Boolean = false,
+    ): StartMatchReply =
+        StartMatchReply.newBuilder()
+            .setAccepted(accepted)
+            .setReason(reason)
+            .setSignalsReady(signalsReady)
+            .build()
 }

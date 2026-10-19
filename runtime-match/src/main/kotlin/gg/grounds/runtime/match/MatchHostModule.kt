@@ -84,7 +84,16 @@ class MatchHostModule(
         this.readiness = readiness
         matches = MatchRegistry(counters, recorder) { readiness?.busy() }
         // Looked up per push, so a module installed after this one still gets the roster.
-        service = MatchHostService(matches, handler, recorder) { ctx.services.playerPrefetches() }
+        service =
+            MatchHostService(
+                matches,
+                handler,
+                recorder,
+                { ctx.services.playerPrefetches() },
+                // A server that does not know its own name cannot be addressed by the matchmaker
+                // at all (see subscribe), so it has nothing to report either.
+                serverName?.takeIf { it.isNotBlank() }?.let { HttpMatchReadySignal(it) },
+            )
     }
 
     override fun start() {
@@ -148,11 +157,13 @@ class MatchHostModule(
         val connection = connect() ?: return
         val subject = "match.host.$serverName.start"
         this.connection = connection
+        val cancelSubject = "match.host.$serverName.cancel"
         dispatcher =
-            connection
-                .createDispatcher { message -> respond(connection, message) }
-                .subscribe(subject)
-        logger.info("MatchHost listening on {}", subject)
+            connection.createDispatcher().also {
+                it.subscribe(subject) { message -> respond(connection, message) }
+                it.subscribe(cancelSubject) { message -> cancel(message) }
+            }
+        logger.info("MatchHost listening on {} and {}", subject, cancelSubject)
     }
 
     /**
@@ -196,6 +207,25 @@ class MatchHostModule(
                     .build()
             }
         connection.publish(replyTo, reply.toByteArray())
+    }
+
+    /**
+     * The matchmaker gave a prepared round up before its players came: `{"matchId": "...",
+     * "reason": "timeout|cancelled|failed"}`. Fire-and-forget; nothing to answer.
+     */
+    private fun cancel(message: Message) {
+        try {
+            val body = String(message.data, Charsets.UTF_8)
+            val matchId = CANCEL_MATCH_ID.find(body)?.groupValues?.get(1)
+            if (matchId.isNullOrBlank()) {
+                logger.warn("Dropping a match cancel without a matchId on {}", message.subject)
+                return
+            }
+            val reason = CANCEL_REASON.find(body)?.groupValues?.get(1) ?: "cancelled"
+            service.cancel(matchId, "matchmaker: $reason")
+        } catch (e: Exception) {
+            logger.error("Failed to handle a match cancel on {}", message.subject, e)
+        }
     }
 
     /**
@@ -273,5 +303,7 @@ class MatchHostModule(
         /** Two agreeing readings, so a match in flight is never mistaken for a leak. */
         const val DRIFT_CONFIRMATIONS = 2
         const val READINESS_INTERVAL_SECONDS = 5L
+        val CANCEL_MATCH_ID = Regex("\"matchId\"\\s*:\\s*\"([^\"]+)\"")
+        val CANCEL_REASON = Regex("\"reason\"\\s*:\\s*\"([^\"]*)\"")
     }
 }
