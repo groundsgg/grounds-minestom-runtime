@@ -20,6 +20,13 @@ dependencies {
     // adds no framework of its own.
     implementation("io.micrometer:micrometer-registry-prometheus:1.16.6")
 
+    // MapStore: the pin file is JSON, map bundles are tar.zst. commons-compress reads the tar;
+    // zstd-jni is the codec it delegates to and has to be on the classpath explicitly. The same
+    // versions the games used for their own copies of the map client.
+    implementation("com.google.code.gson:gson:2.13.2")
+    implementation("org.apache.commons:commons-compress:1.28.0")
+    implementation("com.github.luben:zstd-jni:1.5.7-6")
+
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

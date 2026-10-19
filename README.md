@@ -70,8 +70,44 @@ Both register the instance and use `LightingChunk`. They fix two things a plain
   and a hashed seed derived from that key. The same map always gets the same
   identity, so the LOD cache is reused; a new version gets a fresh one.
 - **Light.** Converted maps carry no sky or block light, and Minestom only lights
-  chunks it generates. `open` relights every chunk as it loads, the same way a
-  generated chunk is lit, so the map is not dark.
+  chunks it generates. `open` relights every chunk of such a map as it loads, the
+  same way a generated chunk is lit, so the map is not dark. A *lit world* (below)
+  is sent with the light it stores.
+
+### Maps for rounds: `MapStore` and `GroundsWorld.prepare`
+
+Minestom computes a chunk's light when the chunk is first sent — on the tick, under
+the instance's monitor, for every chunk around a joining player. On a converted map
+that is seconds of "Loading terrain…" and a stalled server. Rounds therefore play
+lit worlds, loaded in full before anyone joins:
+
+```kotlin
+val maps = MapStore() // MAPS_CDN_BASE, MAPS_ENVIRONMENT, MAPS_CACHE_DIR
+
+// At boot: download and light every map a round may pick, one at a time, in the background.
+maps.warm(listOf("survivalgames", "survivalgames-dm"))
+
+// Per round: the map on local disk, lit if it already is.
+val map = checkNotNull(maps.fetch(maps.pinned("survivalgames").random()))
+val world = GroundsWorld.prepare(map.path, WorldIdentity.of(map.pinned.address, map.version)) {
+    instance -> /* the round's own block changes, e.g. chests */
+}
+// StartMatch can answer now. A joining player's configuration waits for the world:
+world.await(10_000) // then spawningInstance = world.instance
+```
+
+- `MapStore` reads the pin file from the CDN, downloads a bundle once per pod
+  (checked against its pinned SHA-256) and keeps a lit copy beside it. `fetch`
+  returns the lit copy when there is one; otherwise the unlit one, and lights it in
+  the background for the next round.
+- `MapLight.bake` makes a lit world: every chunk lit the way Minestom lights it for
+  a client, `isLightOn = 1`, all-air chunks left out (a missing chunk of a lit world
+  is open sky), leftover upgrade NBT dropped, and a `.grounds-lit-v1` marker. Any
+  step that unpacks a map can produce it; only a world with the marker is trusted.
+- `GroundsWorld.prepare` loads every chunk of the map off the tick thread, on an
+  instance nobody can join yet, runs the round's edits, lights whatever still needs
+  it and only then registers the instance. Nothing loads or lights while players
+  play. Memory per round is the whole map (see the lit size per map in the logs).
 
 Moving a player between worlds with different keys sends a Respawn, so the client
 starts a fresh level (and a fresh LOD level). Minestom resends inventory, health
