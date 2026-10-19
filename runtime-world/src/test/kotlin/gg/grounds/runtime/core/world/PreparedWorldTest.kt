@@ -162,6 +162,38 @@ class PreparedWorldTest {
         assertTrue(instance.chunks.none { (it as GroundsChunk).needsLight() })
     }
 
+    /** A round's whole map is dropped a few chunks a tick, not in one tick. */
+    @Test
+    fun `releasing a world unloads it over several ticks, then unregisters it`() {
+        val instance =
+            GroundsWorld.prepare(litWorld(), WorldIdentity.of("test/release"))
+                .ready
+                .get(30, TimeUnit.SECONDS)
+        val scheduler = MinecraftServer.getSchedulerManager()
+
+        val released = GroundsWorld.release(instance, chunksPerTick = 10)
+        scheduler.processTick()
+        assertTrue(instance.chunks.size in 1 until GROUND.size, "some, not all, after one tick")
+        assertFalse(released.isDone)
+        repeat(5) { scheduler.processTick() }
+
+        assertTrue(released.isDone)
+        assertTrue(instance.chunks.isEmpty())
+        assertFalse(MinecraftServer.getInstanceManager().instances.contains(instance))
+    }
+
+    @Test
+    fun `releasing a world that was never registered only unloads it`() {
+        val world = GroundsWorld.prepare(litWorld(), WorldIdentity.of("test/release")) {}
+        world.ready.get(30, TimeUnit.SECONDS)
+        MinecraftServer.getInstanceManager().unregisterInstance(world.instance)
+
+        val released = GroundsWorld.release(world.instance)
+        MinecraftServer.getSchedulerManager().processTick()
+
+        assertTrue(released.isDone)
+    }
+
     private fun litWorld(): Path {
         val raw = TestWorlds.unlit()
         val lit = raw.resolveSibling("${raw.fileName}-lit")

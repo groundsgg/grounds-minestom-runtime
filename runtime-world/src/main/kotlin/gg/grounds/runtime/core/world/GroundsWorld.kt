@@ -14,6 +14,7 @@ import net.minestom.server.instance.InstanceContainer
 import net.minestom.server.instance.LightingChunk
 import net.minestom.server.instance.anvil.AnvilLoader
 import net.minestom.server.registry.RegistryKey
+import net.minestom.server.timer.TaskSchedule
 import net.minestom.server.world.DimensionType
 
 /**
@@ -121,6 +122,30 @@ object GroundsWorld {
             },
             { task -> Thread.ofVirtual().name("grounds-world-preload").start(task) },
         )
+
+    /**
+     * Unregisters a world nobody is in any more, unloading [chunksPerTick] chunks a tick first
+     * rather than all of them in one tick: a round holds its whole map, and dropping thousands of
+     * chunks at once stalls the tick of every other round on the server. Completes once the world
+     * is unregistered. A world that was never registered (a preparation that failed or was never
+     * used) is only unloaded.
+     */
+    fun release(instance: InstanceContainer, chunksPerTick: Int = 64): CompletableFuture<Void> {
+        val released = CompletableFuture<Void>()
+        MinecraftServer.getSchedulerManager().submitTask {
+            try {
+                instance.chunks.take(chunksPerTick).forEach(instance::unloadChunk)
+                if (instance.chunks.isNotEmpty()) return@submitTask TaskSchedule.nextTick()
+                val instances = MinecraftServer.getInstanceManager()
+                if (instances.instances.contains(instance)) instances.unregisterInstance(instance)
+                released.complete(null)
+            } catch (t: Throwable) {
+                released.completeExceptionally(t)
+            }
+            TaskSchedule.stop()
+        }
+        return released
+    }
 
     /** A world with nothing on disk, for arenas a game builds or generates itself. */
     fun create(
