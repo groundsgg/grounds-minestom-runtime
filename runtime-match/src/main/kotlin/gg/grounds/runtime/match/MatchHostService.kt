@@ -27,15 +27,18 @@ internal constructor(
     private val registry: MatchRegistry,
     private val handler: MatchHandler,
     private val timeline: RuntimeMatchTimeline?,
-    private val prefetches: () -> List<PlayerPrefetch> = { emptyList() },
     /** Where a [PreparedMatchHandler]'s rounds are reported ready; null: never wait for them. */
     private val readySignal: MatchReadySignal? = null,
     /** Runs the ready signal, which blocks on HTTP; never the dispatcher or the tick. */
     private val signalling: Executor = Executor { task -> Thread.ofVirtual().start(task) },
+    private val prefetches: () -> List<PlayerPrefetch> = { emptyList() },
 ) {
     constructor(registry: MatchRegistry, handler: MatchHandler) : this(registry, handler, null)
 
     private val logger = LoggerFactory.getLogger(MatchHostService::class.java)
+
+    /** Matches whose preparation is being watched, so a retried push does not watch twice. */
+    private val watching = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     fun startMatch(request: StartMatchRequest): StartMatchReply =
         startMatch(request, PushHeaders.NONE)
@@ -76,7 +79,10 @@ internal constructor(
                 request.waitForReady &&
                 handler is PreparedMatchHandler &&
                 readySignal != null
-        if (signalsReady && fresh) watchPreparation(handler as PreparedMatchHandler, match)
+        // Once per match: a retried push finds it already watched.
+        if (signalsReady && watching.add(match.matchId)) {
+            watchPreparation(handler as PreparedMatchHandler, match)
+        }
         return if (accepted) {
             reply(accepted = true, reason = "", signalsReady = signalsReady)
         } else {
@@ -114,6 +120,7 @@ internal constructor(
             }
         stage.whenCompleteAsync(
             { _, error ->
+                watching.remove(match.matchId)
                 val ok = error == null
                 timeline?.prepared(match.matchId, ok)
                 if (!ok) logger.error("Match {} could not be prepared", match.matchId, error)

@@ -89,11 +89,13 @@ class MatchHostModule(
                 matches,
                 handler,
                 recorder,
-                { ctx.services.playerPrefetches() },
                 // A server that does not know its own name cannot be addressed by the matchmaker
                 // at all (see subscribe), so it has nothing to report either.
-                serverName?.takeIf { it.isNotBlank() }?.let { HttpMatchReadySignal(it) },
-            )
+                readySignal =
+                    serverName?.takeIf { it.isNotBlank() }?.let { HttpMatchReadySignal(it) },
+            ) {
+                ctx.services.playerPrefetches()
+            }
     }
 
     override fun start() {

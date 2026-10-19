@@ -50,7 +50,7 @@ class PreparedMatchTest {
     }
 
     private fun service(handler: MatchHandler, registry: MatchRegistry = MatchRegistry(counters)) =
-        MatchHostService(registry, handler, null, { emptyList() }, signal, Executor { it.run() })
+        MatchHostService(registry, handler, null, signal, Executor { it.run() })
 
     private fun request(waitForReady: Boolean = true): StartMatchRequest =
         StartMatchRequest.newBuilder()
