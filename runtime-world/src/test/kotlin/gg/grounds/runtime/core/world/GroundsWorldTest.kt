@@ -62,29 +62,60 @@ class GroundsWorldTest {
     }
 
     @Test
-    fun `relighting loader marks every loaded chunk for lighting`() {
+    fun `map loader marks every chunk of an unlit map for lighting`() {
         val instance = GroundsWorld.create(WorldIdentity.of("test/relight"))
         val chunk = RecordingChunk(instance)
 
-        val loaded = RelightingLoader(FixedLoader(chunk)).loadChunk(instance, 0, 0)
+        val loaded = MapLoader(FixedLoader(chunk), lit = false).loadChunk(instance, 0, 0)
 
         assertSame(chunk, loaded)
         assertTrue(chunk.generated)
     }
 
     @Test
-    fun `relighting loader passes a missing chunk through for generation`() {
+    fun `map loader trusts a lit world's chunk that stores its light`() {
         val instance = GroundsWorld.create(WorldIdentity.of("test/relight"))
+        val stored = RecordingChunk(instance).apply { setTag(MapLight.LIGHT_ON, 1) }
+        val unmarked = RecordingChunk(instance)
 
-        assertNull(RelightingLoader(FixedLoader(null)).loadChunk(instance, 0, 0))
+        MapLoader(FixedLoader(stored), lit = true).loadChunk(instance, 0, 0)
+        MapLoader(FixedLoader(unmarked), lit = true).loadChunk(instance, 0, 0)
+
+        assertFalse(stored.generated)
+        assertTrue(unmarked.generated)
     }
 
     @Test
-    fun `relighting loader keeps the delegate's behaviour`() {
+    fun `map loader does not trust stored light outside a lit world`() {
+        val instance = GroundsWorld.create(WorldIdentity.of("test/relight"))
+        val chunk = RecordingChunk(instance).apply { setTag(MapLight.LIGHT_ON, 1) }
+
+        MapLoader(FixedLoader(chunk), lit = false).loadChunk(instance, 0, 0)
+
+        assertTrue(chunk.generated)
+    }
+
+    @Test
+    fun `map loader passes a missing chunk of an unlit map through for generation`() {
+        val instance = GroundsWorld.create(WorldIdentity.of("test/relight"))
+
+        assertNull(MapLoader(FixedLoader(null), lit = false).loadChunk(instance, 0, 0))
+    }
+
+    @Test
+    fun `map loader leaves a missing chunk to the instance's generator`() {
+        val instance = GroundsWorld.create(WorldIdentity.of("test/relight"))
+        instance.setGenerator {}
+
+        assertNull(MapLoader(FixedLoader(null), lit = true).loadChunk(instance, 0, 0))
+    }
+
+    @Test
+    fun `map loader keeps the delegate's behaviour`() {
         val instance = GroundsWorld.create(WorldIdentity.of("test/relight"))
         val chunk = RecordingChunk(instance)
         val delegate = FixedLoader(chunk)
-        val loader = RelightingLoader(delegate)
+        val loader = MapLoader(delegate, lit = false)
 
         loader.loadInstance(instance)
         loader.saveInstance(instance)

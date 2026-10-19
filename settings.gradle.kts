@@ -3,6 +3,7 @@ rootProject.name = "grounds-minestom-runtime"
 include(
     "runtime-api",
     "runtime-core",
+    "runtime-world",
     "runtime-match",
     "runtime-testkit",
     "examples:minigame-agones",

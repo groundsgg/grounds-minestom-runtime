@@ -4,10 +4,10 @@ dependencies {
     implementation(platform("gg.grounds:grounds-dependencies:0.1.0"))
 
     api(project(":runtime-api"))
+    // GroundsWorld, MapStore and friends, in the same packages they always had.
+    api(project(":runtime-world"))
     implementation("gg.grounds:library-jvm-modules-module-core:0.1.0")
-    // `GroundsWorld` sends each map's seed with `Instance.setHashedSeed`, which the 1.21.11 build
-    // from the conventions does not have. 26.2 is the newest upstream release; the games and the
-    // lobby run on our 26.3 fork of it, which has the same instance API.
+    // The same Minestom as runtime-world (see there): 26.2 upstream, the games run our 26.3 fork.
     implementation("net.minestom:minestom:2026.10.07-26.2")
     implementation("org.slf4j:slf4j-api")
 
