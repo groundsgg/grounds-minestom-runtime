@@ -129,7 +129,9 @@ object GroundsWorld {
     ): InstanceContainer = register(container(identity, null, dimensionType))
 
     private fun loader(worldPath: Path): ChunkLoader =
-        MapLoader(AnvilLoader(worldPath), lit = MapLight.isLit(worldPath))
+        // Stripped: the leftover NBT of a converted map is a third of its memory, and nothing reads
+        // it.
+        MapLoader(AnvilLoader(worldPath), lit = MapLight.isLit(worldPath), strip = true)
 
     private fun container(
         identity: WorldIdentity,

@@ -111,6 +111,23 @@ class MapLightTest {
         assertFalse((stored.getChunk(2, 0) as GroundsChunk).needsLight())
     }
 
+    /**
+     * Rounds on island maps always load such chunks; tearing the round down must not trip on them.
+     */
+    @Test
+    fun `a world with open-sky chunks unregisters cleanly`() {
+        val raw = TestWorlds.unlit()
+        val lit = raw.resolveSibling("${raw.fileName}-lit")
+        MapLight.bake(raw, lit)
+        val stored = loadAll(GroundsWorld.open(lit, WorldIdentity.of("test/lit")), GROUND)
+        stored.loadChunk(4, 0).join()
+        stored.loadChunk(40, 40).join()
+
+        MinecraftServer.getInstanceManager().unregisterInstance(stored)
+
+        assertTrue(stored.chunks.isEmpty())
+    }
+
     @Test
     fun `lighting a lit world again does nothing`() {
         val raw = TestWorlds.unlit()
