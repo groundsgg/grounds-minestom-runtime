@@ -204,7 +204,10 @@ internal class MapLoader(
             return if (lit && instance.generator() == null) openSky(instance, chunkX, chunkZ)
             else null
         }
-        val stored = lit && chunk.getTag(MapLight.LIGHT_ON) == ON
+        // Nullable on purpose: a chunk without the tag returns null, which Java hands back as a
+        // platform type that would unbox, and throw, in a plain comparison.
+        val lightOn: Byte? = chunk.getTag(MapLight.LIGHT_ON)
+        val stored = lit && lightOn == ON
         if (strip) chunk.tagHandler().updateContent(CompoundBinaryTag.empty())
         if (!stored) chunk.onGenerate()
         return chunk
