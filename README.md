@@ -76,6 +76,9 @@ Both register the instance and use `LightingChunk`. They fix two things a plain
 
 ### Maps for rounds: `MapStore` and `GroundsWorld.prepare`
 
+These live in the `runtime-world` module (`runtime-core` exposes it), which needs
+nothing but Minestom, so the map service lights maps with the same code.
+
 Minestom computes a chunk's light when the chunk is first sent — on the tick, under
 the instance's monitor, for every chunk around a joining player. On a converted map
 that is seconds of "Loading terrain…" and a stalled server. Rounds therefore play
@@ -97,8 +100,10 @@ world.await(10_000) // then spawningInstance = world.instance
 ```
 
 - `MapStore` reads the pin file from the CDN, downloads a bundle once per pod
-  (checked against its pinned SHA-256) and keeps a lit copy beside it. `fetch`
-  returns the lit copy when there is one; otherwise the unlit one, and lights it in
+  (checked against its pinned SHA-256) and keeps a lit copy beside it. When the pin
+  entry carries the map service's lit copy (`"lit": {"format", "bundleSha256",
+  "bundleUrl"}`) of this runtime's `MapLight.FORMAT`, that is downloaded instead and
+  nothing is lit on the pod. Otherwise `fetch` returns the unlit copy and lights it in
   the background for the next round.
 - `MapLight.bake` makes a lit world: every chunk lit the way Minestom lights it for
   a client, `isLightOn = 1`, all-air chunks left out (a missing chunk of a lit world

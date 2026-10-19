@@ -33,8 +33,15 @@ import org.slf4j.LoggerFactory
  * later — and [GroundsWorld] trusts stored light only in a world that carries the marker.
  */
 object MapLight {
-    /** Present in a lit world's directory; the suffix is the contract's version. */
-    const val MARKER = ".grounds-lit-v1"
+    /**
+     * The version of this contract — of how a lit world is lit and laid out. Raised when either
+     * changes (a Minestom lighting fix, say), which makes every lit world of an older format count
+     * as unlit, so it is lit again.
+     */
+    const val FORMAT = 1
+
+    /** Present in a lit world's directory. */
+    const val MARKER = ".grounds-lit-v$FORMAT"
 
     internal val LIGHT_ON: Tag<Byte> = Tag.Byte("isLightOn")
 

@@ -77,6 +77,71 @@ class MapStoreTest {
         pins = """{"environment": "stage", "maps": {$entries}}"""
     }
 
+    /**
+     * Pins [world] as [address] together with the map service's lit copy of it, of light [format];
+     * [litDigest] overrides the lit copy's real digest.
+     */
+    private fun publishWithLit(
+        address: String,
+        world: Path,
+        format: Int = MapLight.FORMAT,
+        litDigest: String? = null,
+    ) {
+        val raw = bundle(world)
+        val rawSha = sha(raw)
+        bundles[rawSha] = raw
+        val litWorld = world.resolveSibling("${world.fileName}-service-lit")
+        MapLight.bake(world, litWorld)
+        val lit = bundle(litWorld)
+        val litSha = sha(lit)
+        bundles[litSha] = lit
+        pins =
+            """{"environment": "stage", "maps": {"$address": {"version": 2,
+               "bundleSha256": "$rawSha", "bundleUrl": "${base()}/bundle/$rawSha",
+               "lit": {"format": $format, "bundleSha256": "${litDigest ?: litSha}",
+                       "bundleUrl": "${base()}/bundle/$litSha"}}}}"""
+    }
+
+    private fun sha(bytes: ByteArray): String =
+        HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
+
+    @Test
+    fun `the map service's lit copy is downloaded instead of lighting the map here`() {
+        publishWithLit("survivalgames/flat", TestWorlds.unlit())
+        val store = store()
+
+        val fetched = store.fetch("survivalgames/flat")!!
+
+        assertTrue(fetched.lit)
+        assertTrue(MapLight.isLit(fetched.path))
+        assertEquals(1, bundleFetches.get(), "only the lit bundle, never the raw one")
+        assertTrue(store.isLit(fetched.pinned))
+        assertFalse(store.isCached(fetched.pinned))
+    }
+
+    @Test
+    fun `a lit copy of another light format is ignored and the map lit here`() {
+        publishWithLit("survivalgames/flat", TestWorlds.unlit(), format = MapLight.FORMAT + 1)
+        val store = store()
+
+        val fetched = store.fetch("survivalgames/flat")!!
+
+        assertFalse(fetched.lit)
+        assertTrue(MapLight.isLit(store.lightAsync(fetched.pinned).get(60, TimeUnit.SECONDS)!!))
+    }
+
+    @Test
+    fun `a lit copy that is not its pinned digest is refused and the map lit here`() {
+        publishWithLit("survivalgames/flat", TestWorlds.unlit(), litDigest = "00".repeat(32))
+        val store = store()
+
+        val fetched = store.fetch("survivalgames/flat")!!
+
+        assertFalse(fetched.lit)
+        assertTrue(fetched.downloaded)
+        assertTrue(MapLight.isLit(store.lightAsync(fetched.pinned).get(60, TimeUnit.SECONDS)!!))
+    }
+
     @Test
     fun `a pinned map is downloaded once, checked against its digest, then lit`() {
         publish("survivalgames/flat" to TestWorlds.unlit())

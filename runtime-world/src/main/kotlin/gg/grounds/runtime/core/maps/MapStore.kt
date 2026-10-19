@@ -78,7 +78,15 @@ class MapStore(
         val version: Int,
         val bundleSha256: String,
         val bundleUrl: String,
+        /** The map service's lit copy of this bundle, when it has made one. */
+        val lit: LitBundle? = null,
     )
+
+    /**
+     * A lit world (see [MapLight]) the map service made from a pinned bundle, as a bundle of its
+     * own. Used when its [format] is the one this runtime lights to; otherwise the map is lit here.
+     */
+    data class LitBundle(val format: Int, val bundleSha256: String, val bundleUrl: String)
 
     /**
      * A map on local disk: [path] is the world directory, [lit] whether it is the lit copy, and
@@ -141,7 +149,7 @@ class MapStore(
             // a half-world that a later call would hand out.
             val staging = Files.createTempDirectory(cacheDir, ".${pinned.bundleSha256.take(8)}-")
             try {
-                unpack(pinned, staging)
+                unpack(pinned.address, pinned.bundleUrl, pinned.bundleSha256, staging)
                 Files.createFile(staging.resolve(COMPLETE_MARKER))
                 runCatching { Files.move(staging, target, StandardCopyOption.ATOMIC_MOVE) }
             } finally {
@@ -171,6 +179,9 @@ class MapStore(
             CompletableFuture.supplyAsync(
                     {
                         try {
+                            download(pinned)?.let {
+                                return@supplyAsync it
+                            }
                             val raw = materialise(pinned) ?: return@supplyAsync null
                             MapLight.bake(raw, target)
                             target
@@ -198,6 +209,10 @@ class MapStore(
         val pinned = resolve(address) ?: return null
         val lit = litDir(pinned)
         if (MapLight.isLit(lit)) return Fetched(pinned, lit, downloaded = false, lit = true)
+        // The map service's lit copy is a download like any other, not a wait for light.
+        download(pinned)?.let {
+            return Fetched(pinned, it, downloaded = true, lit = true)
+        }
         val cached = isCached(pinned)
         val raw = materialise(pinned) ?: return null
         lightAsync(pinned)
@@ -265,6 +280,33 @@ class MapStore(
             Thread(task, "grounds-map-warm").apply { isDaemon = true }
         }
 
+    /**
+     * Downloads the map service's lit copy of [pinned] into place, or returns null when there is
+     * none of this runtime's format or it cannot be had — the map is then lit here instead.
+     */
+    private fun download(pinned: PinnedMap): Path? {
+        val lit = pinned.lit?.takeIf { it.format == MapLight.FORMAT } ?: return null
+        val target = litDir(pinned)
+        if (MapLight.isLit(target)) return target
+        return try {
+            Files.createDirectories(target.parent)
+            val staging =
+                Files.createTempDirectory(target.parent, ".${pinned.bundleSha256.take(8)}-")
+            try {
+                unpack(pinned.address, lit.bundleUrl, lit.bundleSha256, staging)
+                check(MapLight.isLit(staging)) { "the lit bundle of ${pinned.address} is not lit" }
+                runCatching { Files.move(staging, target, StandardCopyOption.ATOMIC_MOVE) }
+            } finally {
+                if (Files.exists(staging)) staging.toFile().deleteRecursively()
+            }
+            log.info("Downloaded lit {} v{} at {}", pinned.address, pinned.version, target)
+            target
+        } catch (e: Exception) {
+            log.warn("Could not download lit {} from {}", pinned.address, lit.bundleUrl, e)
+            null
+        }
+    }
+
     private fun rawDir(pinned: PinnedMap): Path = cacheDir.resolve(pinned.bundleSha256)
 
     private fun litDir(pinned: PinnedMap): Path =
@@ -282,15 +324,24 @@ class MapStore(
                     version = entry.get("version").asInt,
                     bundleSha256 = entry.get("bundleSha256").asString,
                     bundleUrl = entry.get("bundleUrl").asString,
+                    lit =
+                        entry.getAsJsonObject("lit")?.let { lit ->
+                            LitBundle(
+                                format = lit.get("format").asInt,
+                                bundleSha256 = lit.get("bundleSha256").asString,
+                                bundleUrl = lit.get("bundleUrl").asString,
+                            )
+                        },
                 )
         }
     }
 
-    private fun unpack(pinned: PinnedMap, into: Path) {
-        val request = HttpRequest.newBuilder(URI.create(pinned.bundleUrl)).GET().build()
+    /** Downloads the bundle at [url] into [into], refusing it unless its digest is [sha256]. */
+    private fun unpack(address: String, url: String, sha256: String, into: Path) {
+        val request = HttpRequest.newBuilder(URI.create(url)).GET().build()
         val response = http.send(request, HttpResponse.BodyHandlers.ofInputStream())
         require(response.statusCode() == 200) {
-            "bundle fetch returned ${response.statusCode()} for ${pinned.bundleUrl}"
+            "bundle fetch returned ${response.statusCode()} for $url"
         }
         val digest = MessageDigest.getInstance("SHA-256")
         DigestInputStream(BufferedInputStream(response.body()), digest).use { raw ->
@@ -312,8 +363,8 @@ class MapStore(
             raw.transferTo(OutputStream.nullOutputStream())
         }
         val actual = HexFormat.of().formatHex(digest.digest())
-        require(actual.equals(pinned.bundleSha256, ignoreCase = true)) {
-            "bundle of ${pinned.address} has digest $actual, pinned is ${pinned.bundleSha256}"
+        require(actual.equals(sha256, ignoreCase = true)) {
+            "bundle of $address has digest $actual, pinned is $sha256"
         }
     }
 
