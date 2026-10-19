@@ -136,9 +136,9 @@ class MapStoreTest {
     @Test
     fun `warming lights every map of the server's namespaces and nothing else`() {
         publish(
-            "survivalgames/a" to TestWorlds.unlit(),
-            "survivalgames-dm/b" to TestWorlds.unlit(),
-            "getdown/c" to TestWorlds.unlit(),
+            "survivalgames/a" to distinct("a"),
+            "survivalgames-dm/b" to distinct("b"),
+            "getdown/c" to distinct("c"),
         )
         val store = store()
 
@@ -153,7 +153,7 @@ class MapStoreTest {
 
     @Test
     fun `a random pick prefers maps that are already lit`() {
-        publish("survivalgames/a" to TestWorlds.unlit(), "survivalgames/b" to TestWorlds.unlit())
+        publish("survivalgames/a" to distinct("a"), "survivalgames/b" to distinct("b"))
         val store = store()
 
         val first = store.pick("survivalgames")!!
@@ -197,6 +197,10 @@ class MapStoreTest {
 
         assertEquals(2, pins.getValue("u/hendrik/my-map").version)
     }
+
+    /** A test world whose bundle differs from every other's, so the two get different digests. */
+    private fun distinct(name: String): Path =
+        TestWorlds.unlit().also { Files.writeString(it.resolve("name.txt"), name) }
 
     private fun bundle(world: Path): ByteArray {
         val out = ByteArrayOutputStream()
