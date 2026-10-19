@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.13.1...v0.14.0) (2026-10-19)
+
+
+### Features
+
+* **match:** prepared rounds, players stay queued until the round is ready ([#49](https://github.com/groundsgg/grounds-minestom-runtime/issues/49)) ([0df9857](https://github.com/groundsgg/grounds-minestom-runtime/commit/0df9857ef630c9b253b026c1ec1d3225755bb9b7))
+
 ## [0.13.1](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.13.0...v0.13.1) (2026-10-19)
 
 
