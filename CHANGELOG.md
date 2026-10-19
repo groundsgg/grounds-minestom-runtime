@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.13.0...v0.13.1) (2026-10-19)
+
+
+### Performance Improvements
+
+* **world:** release a round world a few chunks a tick ([#47](https://github.com/groundsgg/grounds-minestom-runtime/issues/47)) ([667ed88](https://github.com/groundsgg/grounds-minestom-runtime/commit/667ed88b1c85a1d60f1a17aac52c71137902976a))
+
 ## [0.13.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.12.0...v0.13.0) (2026-10-19)
 
 
