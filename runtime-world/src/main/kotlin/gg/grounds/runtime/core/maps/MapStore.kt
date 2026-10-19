@@ -325,13 +325,17 @@ class MapStore(
                     bundleSha256 = entry.get("bundleSha256").asString,
                     bundleUrl = entry.get("bundleUrl").asString,
                     lit =
-                        entry.getAsJsonObject("lit")?.let { lit ->
-                            LitBundle(
-                                format = lit.get("format").asInt,
-                                bundleSha256 = lit.get("bundleSha256").asString,
-                                bundleUrl = lit.get("bundleUrl").asString,
-                            )
-                        },
+                        entry
+                            .get("lit")
+                            ?.takeIf { it.isJsonObject }
+                            ?.asJsonObject
+                            ?.let { lit ->
+                                LitBundle(
+                                    format = lit.get("format").asInt,
+                                    bundleSha256 = lit.get("bundleSha256").asString,
+                                    bundleUrl = lit.get("bundleUrl").asString,
+                                )
+                            },
                 )
         }
     }
