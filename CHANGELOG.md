@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.12.0...v0.13.0) (2026-10-19)
+
+
+### Features
+
+* **world:** lit maps and rounds prepared before anyone joins ([#45](https://github.com/groundsgg/grounds-minestom-runtime/issues/45)) ([bea0eee](https://github.com/groundsgg/grounds-minestom-runtime/commit/bea0eee38eb8f03ad6935ca6245865b1f5d977ee))
+
 ## [0.12.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.11.0...v0.12.0) (2026-10-17)
 
 
