@@ -83,6 +83,22 @@ internal class RuntimeMatchTimeline(
         }
     }
 
+    /**
+     * A [PreparedMatchHandler]'s round is ready ([ok]) or could not be prepared. From here the
+     * players are on their way; before it they were still in the queue.
+     */
+    fun prepared(matchId: String, ok: Boolean) {
+        withMatch(matchId) { match ->
+            if ("prepared" in match.stages) return
+            val now = clock.instant()
+            record(PREPARED, "prepared", match, now, "result", if (ok) "ok" else "failed")
+            child(match, "prepare", match.pushedAt, now) { span ->
+                if (!ok) span.setStatus(StatusCode.ERROR, "round could not be prepared")
+            }
+            mark(match, if (ok) "prepared" else "prepare_failed", now)
+        }
+    }
+
     override fun mapLoaded(matchId: String, source: MatchTimeline.MapSource) {
         withMatch(matchId) { match ->
             if ("map" in match.stages) return
@@ -283,6 +299,7 @@ internal class RuntimeMatchTimeline(
         private const val PREFIX = "grounds.match."
         const val ACCEPT = "${PREFIX}time.to.accept"
         const val MAP = "${PREFIX}time.to.map"
+        const val PREPARED = "${PREFIX}time.to.prepared"
         const val FIRST_JOIN = "${PREFIX}time.to.first.join"
         const val ALL_JOINED = "${PREFIX}time.to.all.joined"
         const val START = "${PREFIX}time.to.start"
