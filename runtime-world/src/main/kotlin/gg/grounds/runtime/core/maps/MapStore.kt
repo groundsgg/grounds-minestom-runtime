@@ -2,6 +2,8 @@ package gg.grounds.runtime.core.maps
 
 import com.google.gson.JsonParser
 import gg.grounds.runtime.core.world.MapLight
+import io.nats.client.Nats
+import io.nats.client.Options
 import java.io.BufferedInputStream
 import java.io.OutputStream
 import java.net.URI
@@ -46,10 +48,18 @@ import org.slf4j.LoggerFactory
  * pick before a round asks, and [fetch] hands out the unlit copy, and starts the light in the
  * background, when a round gets there first.
  *
+ * A digest that is no longer pinned is deleted again once no round has been handed it for
+ * [roundGrace] (see [evict]); a game server lives for days and would otherwise keep every version
+ * it ever played.
+ *
  * @param environment which pin file to read. Read from `MAPS_ENVIRONMENT`, deliberately not
  *   `GROUNDS_ENV`: that one is the runtime's own and accepts only prod/test/dev, while a pin file
  *   is named after a deployment environment like `stage`
  * @param cacheDir where bundles are unpacked and lit, keyed by digest (`MAPS_CACHE_DIR`)
+ * @param natsUrl where service-maps announces pin file changes (`NATS_URL`); [keepWarm] then warms
+ *   on every announcement instead of only on its timer
+ * @param roundGrace how long after a round was handed a map its files must stay: the world is read
+ *   chunk by chunk while the round runs, so it cannot go before the round is over
  */
 class MapStore(
     private val cdnBase: String = System.getenv("MAPS_CDN_BASE") ?: DEFAULT_CDN_BASE,
@@ -57,6 +67,8 @@ class MapStore(
     private val cacheDir: Path = Path.of(System.getenv("MAPS_CACHE_DIR") ?: DEFAULT_CACHE_DIR),
     private val http: HttpClient =
         HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(CONNECT_TIMEOUT_SECONDS)).build(),
+    private val natsUrl: String? = System.getenv("NATS_URL")?.takeIf { it.isNotBlank() },
+    private val roundGrace: Duration = DEFAULT_ROUND_GRACE,
 ) {
     private val log = LoggerFactory.getLogger(MapStore::class.java)
 
@@ -71,6 +83,9 @@ class MapStore(
 
     /** Lights in progress or done, by bundle digest, so each map is lit once. */
     private val lighting = ConcurrentHashMap<String, CompletableFuture<Path?>>()
+
+    /** When a round was last handed each digest, in epoch millis; see [evict]. */
+    private val handedOut = ConcurrentHashMap<String, Long>()
 
     /** What the pin file says about one map. */
     data class PinnedMap(
@@ -169,7 +184,10 @@ class MapStore(
      * [pinned]'s lit copy, lighting it now if needed — blocking, seconds for a large map. Null if
      * the map cannot be had or lit. Concurrent calls for one map light it once.
      */
-    fun lit(pinned: PinnedMap): Path? = lightAsync(pinned).join()
+    fun lit(pinned: PinnedMap): Path? =
+        lightAsync(pinned).join().also {
+            handedOut[pinned.bundleSha256] = System.currentTimeMillis()
+        }
 
     /** Starts lighting [pinned] unless it is lit or being lit. */
     fun lightAsync(pinned: PinnedMap): CompletableFuture<Path?> {
@@ -207,6 +225,7 @@ class MapStore(
      */
     fun fetch(address: String): Fetched? {
         val pinned = resolve(address) ?: return null
+        handedOut[pinned.bundleSha256] = System.currentTimeMillis()
         val lit = litDir(pinned)
         if (MapLight.isLit(lit)) return Fetched(pinned, lit, downloaded = false, lit = true)
         // The map service's lit copy is a download like any other, not a wait for light.
@@ -222,11 +241,14 @@ class MapStore(
     /**
      * Downloads and lights, in the background and one at a time, every map pinned under
      * [namespaces] — all maps a round on this server may pick, so the pick is lit when it is made.
-     * Completes when all are done; a map that fails is logged and skipped.
+     * Completes when all are done, then [evict]s what [pins] no longer names; a map that fails is
+     * logged and skipped.
      */
-    fun warm(namespaces: Collection<String>): CompletableFuture<Void> {
-        val pinned =
-            pins().values.filter { map -> namespaces.any { map.address.startsWith("$it/") } }
+    fun warm(
+        namespaces: Collection<String>,
+        pins: Map<String, PinnedMap> = pins(),
+    ): CompletableFuture<Void> {
+        val pinned = pins.values.filter { map -> namespaces.any { map.address.startsWith("$it/") } }
         val started = System.nanoTime()
         log.info("Warming {} maps of {}", pinned.size, namespaces)
         val all = pinned.sortedBy { it.address }.map(::lightAsync)
@@ -238,6 +260,39 @@ class MapStore(
                 namespaces,
                 (System.nanoTime() - started) / 1_000_000_000,
             )
+            evict(pins)
+        }
+    }
+
+    /**
+     * Deletes every cached digest, unpacked and lit, that [pins] no longer names and no round was
+     * handed within [roundGrace].
+     *
+     * Nothing goes when [pins] is empty: that is what an unreadable pin file looks like, and it
+     * says nothing about what is still in use.
+     */
+    internal fun evict(pins: Map<String, PinnedMap>) {
+        if (pins.isEmpty()) return
+        val pinned = pins.values.mapTo(mutableSetOf()) { it.bundleSha256 }
+        val cutoff = System.currentTimeMillis() - roundGrace.toMillis()
+        for (dir in listOf(cacheDir, cacheDir.resolve(LIT_DIR))) {
+            if (!Files.isDirectory(dir)) continue
+            Files.list(dir)
+                .use { it.toList() }
+                .filter { path ->
+                    val digest = path.fileName.toString()
+                    // Only digest-named entries: staging directories start with a dot, and the lit
+                    // directory sits among the unpacked ones.
+                    DIGEST.matches(digest) && digest !in pinned && (handedOut[digest] ?: 0) < cutoff
+                }
+                .forEach { path ->
+                    val digest = path.fileName.toString()
+                    // Before the files: a finished light would otherwise keep handing out a path
+                    // that no longer exists if this digest is pinned again.
+                    lighting.remove(digest)
+                    path.toFile().deleteRecursively()
+                    log.info("Evicted {} {}, no longer pinned", dir.fileName, digest)
+                }
         }
     }
 
@@ -253,6 +308,30 @@ class MapStore(
             period.toSeconds(),
             TimeUnit.SECONDS,
         )
+        natsUrl?.let { warmOnAnnouncement(it, namespaces) }
+    }
+
+    /**
+     * Warms from every pin file service-maps announces, so a new map is lit within seconds of its
+     * pin rather than at the next timer tick. The announcement is the pin file itself, which the
+     * CDN may not be serving yet. The timer stays: an announcement missed while disconnected is
+     * caught by it.
+     */
+    private fun warmOnAnnouncement(url: String, namespaces: Collection<String>) {
+        val connection =
+            Nats.connectReconnectOnConnect(
+                Options.Builder().server(url).connectionName("maps-$environment").build()
+            )
+        connection
+            .createDispatcher { message ->
+                val pins =
+                    runCatching { parsePins(message.data.decodeToString()) }
+                        .onFailure { log.warn("Ignoring an unreadable pin announcement", it) }
+                        .getOrNull() ?: return@createDispatcher
+                // On the warm thread, so it queues behind a timer warm instead of racing it.
+                warmer.execute { runCatching { warm(namespaces, pins).join() } }
+            }
+            .subscribe("maps.pins.$environment")
     }
 
     /**
@@ -410,5 +489,10 @@ class MapStore(
         const val READ_TIMEOUT_SECONDS = 15L
 
         val DEFAULT_WARM_PERIOD: Duration = Duration.ofMinutes(10)
+
+        /** Longer than any round: a round reads its world until it ends. */
+        val DEFAULT_ROUND_GRACE: Duration = Duration.ofHours(3)
+
+        val DIGEST = Regex("[0-9a-f]{64}")
     }
 }

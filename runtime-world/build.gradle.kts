@@ -18,6 +18,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.13.2")
     implementation("org.apache.commons:commons-compress:1.28.0")
     implementation("com.github.luben:zstd-jni:1.5.7-6")
+    implementation("io.nats:jnats:2.26.0")
 
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
