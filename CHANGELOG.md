@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.14.0...v0.15.0) (2026-10-23)
+
+
+### Features
+
+* **maps:** warm on pin announcements and evict unpinned versions ([#51](https://github.com/groundsgg/grounds-minestom-runtime/issues/51)) ([469c3a3](https://github.com/groundsgg/grounds-minestom-runtime/commit/469c3a3876b724d843bffa186e0f5f684ba05031))
+
 ## [0.14.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.13.1...v0.14.0) (2026-10-19)
 
 
