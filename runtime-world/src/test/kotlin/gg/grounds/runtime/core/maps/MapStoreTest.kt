@@ -8,6 +8,7 @@ import java.net.InetSocketAddress
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
+import java.time.Duration
 import java.util.HexFormat
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
@@ -61,7 +62,14 @@ class MapStoreTest {
 
     private fun base() = "http://127.0.0.1:${server.address.port}"
 
-    private fun store() = MapStore(cdnBase = base(), environment = "stage", cacheDir = cache)
+    private fun store(roundGrace: Duration = Duration.ofHours(3)) =
+        MapStore(
+            cdnBase = base(),
+            environment = "stage",
+            cacheDir = cache,
+            natsUrl = null,
+            roundGrace = roundGrace,
+        )
 
     /** Publishes [world] as a bundle and pins it as [address]; [digest] overrides the real one. */
     private fun publish(vararg maps: Pair<String, Path>, digest: String? = null) {
@@ -214,6 +222,45 @@ class MapStoreTest {
         assertFalse(store.isLit(store.resolve("getdown/c")!!))
         assertFalse(store.isCached(store.resolve("getdown/c")!!))
         assertTrue(store.fetch("survivalgames/a")!!.lit)
+    }
+
+    @Test
+    fun `a re-pinned map's old version is deleted once no round needs it`() {
+        publish("survivalgames/a" to distinct("v1"))
+        val store = store(roundGrace = Duration.ZERO)
+        store.warm(listOf("survivalgames")).get(120, TimeUnit.SECONDS)
+        val old = store.resolve("survivalgames/a")!!
+
+        publish("survivalgames/a" to distinct("v2"))
+        store.warm(listOf("survivalgames")).get(120, TimeUnit.SECONDS)
+
+        assertFalse(store.isCached(old))
+        assertFalse(store.isLit(old))
+        assertTrue(store.isLit(store.resolve("survivalgames/a")!!))
+    }
+
+    @Test
+    fun `a version a round was just handed stays until the round can be over`() {
+        publish("survivalgames/a" to distinct("v1"))
+        val store = store()
+        val playing = store.fetch("survivalgames/a")!!
+
+        publish("survivalgames/a" to distinct("v2"))
+        store.warm(listOf("survivalgames")).get(120, TimeUnit.SECONDS)
+
+        assertTrue(Files.isDirectory(playing.path))
+    }
+
+    @Test
+    fun `an unreadable pin file deletes nothing`() {
+        publish("survivalgames/a" to distinct("v1"))
+        val store = store(roundGrace = Duration.ZERO)
+        store.warm(listOf("survivalgames")).get(120, TimeUnit.SECONDS)
+        val cached = store.resolve("survivalgames/a")!!
+
+        store.evict(emptyMap())
+
+        assertTrue(store.isLit(cached))
     }
 
     @Test
