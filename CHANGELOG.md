@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.1](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.15.0...v0.15.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **world:** rebuild maps with corrected vanilla lighting ([#53](https://github.com/groundsgg/grounds-minestom-runtime/issues/53)) ([c379773](https://github.com/groundsgg/grounds-minestom-runtime/commit/c379773c4a50d9a7e88ae303a21e16545c524ff2))
+
 ## [0.15.0](https://github.com/groundsgg/grounds-minestom-runtime/compare/v0.14.0...v0.15.0) (2026-10-23)
 
 
