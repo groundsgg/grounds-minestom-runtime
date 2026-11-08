@@ -56,7 +56,7 @@ jobs:
           mkdir -p ~/.gradle
           {
             echo "github.user=${{ github.actor }}"
-            echo "github.token=${{ secrets.GITHUB_TOKEN }}"
+            echo "github.token=${{ secrets.PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}"
           } > ~/.gradle/gradle.properties
 
       - name: Determine version
@@ -70,6 +70,17 @@ jobs:
           # like feat/foo_bar resolves to a legal Maven version.
           sanitized=$(echo "$branch" | sed 's/[^a-zA-Z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//')
           echo "version=${sanitized}-SNAPSHOT" >> "$GITHUB_OUTPUT"
+
+      - name: Build with dependency credentials
+        run: ./gradlew build --exclude-task test -PversionOverride="${{ steps.version.outputs.version }}"
+
+      # Dependency reads may cross private repositories; writes stay scoped to this repository.
+      - name: Configure publishing credentials
+        run: |
+          {
+            echo "github.user=${{ github.actor }}"
+            echo "github.token=${{ secrets.GITHUB_TOKEN }}"
+          } > ~/.gradle/gradle.properties
 
       - name: Publish
         env:

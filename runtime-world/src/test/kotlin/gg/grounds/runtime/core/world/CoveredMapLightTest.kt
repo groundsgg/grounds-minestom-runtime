@@ -1,6 +1,7 @@
 package gg.grounds.runtime.core.world
 
 import java.nio.file.Files
+import java.nio.file.Path
 import net.minestom.server.MinecraftServer
 import net.minestom.server.instance.anvil.AnvilLoader
 import net.minestom.server.instance.block.Block
@@ -9,13 +10,19 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import java.nio.file.Path
 
 class CoveredMapLightTest {
     @TempDir lateinit var root: Path
 
-    @BeforeEach fun init() { MinecraftServer.init() }
-    @AfterEach fun stop() { MinecraftServer.stopCleanly() }
+    @BeforeEach
+    fun init() {
+        MinecraftServer.init()
+    }
+
+    @AfterEach
+    fun stop() {
+        MinecraftServer.stopCleanly()
+    }
 
     @Test
     fun `floor lighting passes through carpet within a section`() {
@@ -55,7 +62,10 @@ class CoveredMapLightTest {
         val loaded = GroundsWorld.prepare(lit, WorldIdentity.of("test/covered")).ready.join()
         val chunk = loaded.getChunk(0, 0)!!
         assertEquals(15, TestWorlds.blockLightAt(chunk, 8, sourceY, 8))
-        assertEquals(expected, TestWorlds.blockLightAt(chunk, 8, sourceY + 2, 8),
-            "light above ${cover.key()} at source Y=$sourceY")
+        assertEquals(
+            expected,
+            TestWorlds.blockLightAt(chunk, 8, sourceY + 2, 8),
+            "light above ${cover.key()} at source Y=$sourceY",
+        )
     }
 }
