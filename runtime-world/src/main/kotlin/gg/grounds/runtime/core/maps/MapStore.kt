@@ -480,7 +480,7 @@ class MapStore(
         const val DEFAULT_CACHE_DIR = "/tmp/grounds-maps"
 
         /** Lit copies, by bundle digest; the suffix follows [MapLight.MARKER]'s version. */
-        const val LIT_DIR = "lit-v1"
+        const val LIT_DIR = "lit-v${MapLight.FORMAT}"
 
         /** Written last, so its presence means the unpack finished. */
         const val COMPLETE_MARKER = ".complete"

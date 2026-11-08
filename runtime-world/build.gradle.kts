@@ -6,10 +6,9 @@ plugins { id("gg.grounds.minestom-conventions") }
 dependencies {
     implementation(platform("gg.grounds:grounds-dependencies:0.1.0"))
 
-    // `GroundsWorld` sends each map's seed with `Instance.setHashedSeed`, which the 1.21.11 build
-    // from the conventions does not have. 26.2 is the newest upstream release; the games and the
-    // lobby run on our 26.3 fork of it, which has the same instance API.
-    implementation("net.minestom:minestom:2026.10.07-26.2")
+    // Format 2 requires the corrected vanilla light-shape, opacity and source-state semantics.
+    // Pin the same Grounds build used by the map worker, games and lobby.
+    implementation("net.minestom:minestom:2026.11.08-26.3-grounds")
     implementation("org.slf4j:slf4j-api")
 
     // MapStore: the pin file is JSON, map bundles are tar.zst. commons-compress reads the tar;
