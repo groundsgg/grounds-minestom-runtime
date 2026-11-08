@@ -128,6 +128,21 @@ class MapStoreTest {
     }
 
     @Test
+    fun `a cached map with carpet-blocking lighting is rebuilt in a fresh cache directory`() {
+        publish("survivalgames/flat" to TestWorlds.unlit())
+        val store = store()
+        val pinned = store.resolve("survivalgames/flat")!!
+        val stale = Files.createDirectories(cache.resolve("lit-v1").resolve(pinned.bundleSha256))
+        Files.createFile(stale.resolve(".grounds-lit-v1"))
+
+        assertFalse(store.isLit(pinned), "old lighting must not be handed to a round")
+        val rebuilt = store.lightAsync(pinned).get(60, TimeUnit.SECONDS)!!
+        assertNotEquals(stale, rebuilt, "rebaking must not collide with the old cache")
+        assertTrue(MapLight.isLit(rebuilt))
+        assertTrue(store.fetch(pinned.address)!!.lit)
+    }
+
+    @Test
     fun `a lit copy of another light format is ignored and the map lit here`() {
         publishWithLit("survivalgames/flat", TestWorlds.unlit(), format = MapLight.FORMAT + 1)
         val store = store()

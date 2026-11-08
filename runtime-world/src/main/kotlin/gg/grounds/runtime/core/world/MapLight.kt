@@ -38,7 +38,8 @@ object MapLight {
      * changes (a Minestom lighting fix, say), which makes every lit world of an older format count
      * as unlit, so it is lit again.
      */
-    const val FORMAT = 1
+    // v2 uses vanilla light-specific shapes and opacity (carpets, tinted glass and source states).
+    const val FORMAT = 2
 
     /** Present in a lit world's directory. */
     const val MARKER = ".grounds-lit-v$FORMAT"

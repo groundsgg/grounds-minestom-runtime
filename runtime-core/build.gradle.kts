@@ -7,8 +7,8 @@ dependencies {
     // GroundsWorld, MapStore and friends, in the same packages they always had.
     api(project(":runtime-world"))
     implementation("gg.grounds:library-jvm-modules-module-core:0.1.0")
-    // The same Minestom as runtime-world (see there): 26.2 upstream, the games run our 26.3 fork.
-    implementation("net.minestom:minestom:2026.10.07-26.2")
+    // Keep the runtime on the same corrected Grounds engine as runtime-world.
+    implementation("net.minestom:minestom:2026.11.08-26.3-grounds")
     implementation("org.slf4j:slf4j-api")
 
     // The metrics endpoint. Micrometer rather than a hand-written exposition format, because its
